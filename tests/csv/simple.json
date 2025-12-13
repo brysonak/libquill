@@ -1,0 +1,19 @@
+{
+ "rows": [
+  [
+   "name",
+   "age",
+   "city"
+  ],
+  [
+   "John",
+   "30",
+   "Paris"
+  ],
+  [
+   "Bob",
+   "25",
+   "New York, NY"
+  ]
+ ]
+}
