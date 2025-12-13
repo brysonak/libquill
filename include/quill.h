@@ -35,6 +35,7 @@ typedef struct quill_parser {
 int quill_init(quill_parser *p, char delim);
 void quill_feed(quill_parser *p, const char *buf, size_t len);
 int quill_next(quill_parser *p, quill_field *f);
+const char *quill_value(const quill_field *f, char *dst, size_t *len);
 
 #ifdef __cplusplus
 }
@@ -175,6 +176,31 @@ int quill_next(quill_parser *p, quill_field *f)
         return QUILL_FIELD;
     }
     return QUILL_END;
+}
+
+const char *quill_value(const quill_field *f, char *dst, size_t *len)
+{
+    const char *s = f->ptr, *e = f->ptr + f->len, *q;
+    char *d = dst;
+    int in = 1;
+    if (!f->quoted) {
+        *len = f->len;
+        return f->ptr;
+    }
+    while ((q = (const char *)memchr(s, '"', (size_t)(e - s))) != NULL) {
+        memcpy(d, s, (size_t)(q - s));
+        d += q - s;
+        if (in && q + 1 < e && q[1] == '"') {
+            *d++ = '"';
+            s = q + 2;
+        } else {
+            in = !in;
+            s = q + 1;
+        }
+    }
+    memcpy(d, s, (size_t)(e - s));
+    *len = (size_t)(d - dst) + (size_t)(e - s);
+    return dst;
 }
 
 #endif

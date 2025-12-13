@@ -5,14 +5,26 @@
 #include <stdlib.h>
 
 static int row_open;
+static char *scratch;
+static size_t scratch_cap;
 
 static void emit(const quill_field *f)
 {
-    size_t i;
+    size_t n, i;
+    const char *v;
+    if (f->len > scratch_cap) {
+        scratch_cap = f->len * 2;
+        scratch = (char *)realloc(scratch, scratch_cap);
+        if (!scratch) {
+            fprintf(stderr, "out of memory\n");
+            exit(2);
+        }
+    }
+    v = quill_value(f, scratch, &n);
     fputs(row_open ? "," : "[", stdout);
     putchar('"');
-    for (i = 0; i < f->len; i++) {
-        unsigned char c = (unsigned char)f->ptr[i];
+    for (i = 0; i < n; i++) {
+        unsigned char c = (unsigned char)v[i];
         if (c == '"' || c == '\\')
             printf("\\%c", c);
         else
@@ -64,6 +76,7 @@ int main(int argc, char **argv)
         emit(&f);
     if (row_open)
         fputs("]\n", stdout);
+    free(scratch);
     free(buf);
     return 0;
 }
