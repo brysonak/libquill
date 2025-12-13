@@ -24,6 +24,8 @@ def test(build):
         ok = rows == want
         failures += not ok
         print(f"  {'ok' if ok else 'FAIL':4} {name}")
+        if not ok:
+            print(f"       got  {rows}\n       want {want}")
     return 1 if failures else 0
 
 
