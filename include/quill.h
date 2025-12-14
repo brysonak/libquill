@@ -139,6 +139,8 @@ static void quill_i_emit(quill_parser *p, quill_field *f, const char *e, int eol
 {
     const char *s = p->field;
     p->field = e + 1;
+    if (eol && e[-1] == '\r')
+        e--;
     f->quoted = *s == '"';
     if (f->quoted) {
         s++;
