@@ -27,6 +27,8 @@ static void emit(const quill_field *f)
         unsigned char c = (unsigned char)v[i];
         if (c == '"' || c == '\\')
             printf("\\%c", c);
+        else if (c < 0x20 || c >= 0x7F)
+            printf("\\u%04x", c);
         else
             putchar(c);
     }

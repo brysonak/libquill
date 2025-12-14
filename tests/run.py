@@ -19,7 +19,7 @@ def test(build):
             continue
         path = os.path.join(CSV_DIR, name)
         with open(path[:-4] + ".json", encoding="utf-8") as f:
-            want = json.load(f)["rows"]
+            want = [[cell.encode("utf-8").decode("latin-1") for cell in row] for row in json.load(f)["rows"]]
         rows = dump(build, path)
         ok = rows == want
         failures += not ok
