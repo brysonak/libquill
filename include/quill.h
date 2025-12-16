@@ -112,6 +112,8 @@ void quill_feed(quill_parser *p, const char *buf, size_t len)
     p->end = buf + len;
     p->n = 0;
     p->ip = p->ie = p->idx;
+    if (len >= 3 && memcmp(buf, "\xEF\xBB\xBF", 3) == 0)
+        p->field = p->scan = buf + 3;
 }
 
 static void quill_i_scan(quill_parser *p)
