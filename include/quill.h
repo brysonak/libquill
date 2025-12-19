@@ -84,7 +84,11 @@ QUILL_INLINE const char *quill_value(const quill_field *f, char *dst, size_t *le
 #ifndef QUILL_IMPLEMENTATION_DONE
 #define QUILL_IMPLEMENTATION_DONE
 
+#if defined(__GNUC__) || defined(__clang__)
+#define QUILL_I_INLINE static inline __attribute__((always_inline))
+#else
 #define QUILL_I_INLINE static inline
+#endif
 
 QUILL_I_INLINE unsigned quill_i_ctz(uint64_t x)
 {
