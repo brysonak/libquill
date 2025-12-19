@@ -14,6 +14,8 @@ extern "C" {
 #define QUILL_I_CAP    4096
 #define QUILL_I_BLOCKS (QUILL_I_CAP / 64)
 
+#define QUILL_INLINE static inline
+
 enum { QUILL_END = 0, QUILL_FIELD = 1 };
 
 typedef struct {
@@ -34,8 +36,44 @@ typedef struct quill_parser {
 
 int quill_init(quill_parser *p, char delim);
 void quill_feed(quill_parser *p, const char *buf, size_t len);
-int quill_next(quill_parser *p, quill_field *f);
-const char *quill_value(const quill_field *f, char *dst, size_t *len);
+int quill_i_next_slow(quill_parser *p, quill_field *f);
+const char *quill_i_unescape(const quill_field *f, char *dst, size_t *len);
+
+QUILL_INLINE void quill_i_emit(quill_parser *p, quill_field *f, const char *e, int eol)
+{
+    const char *s = p->field;
+    p->field = e + 1;
+    if (eol && e > s && e[-1] == '\r')
+        e--;
+    f->quoted = *s == '"';
+    if (f->quoted) {
+        s++;
+        if (e[-1] == '"')
+            e--;
+    }
+    f->ptr = s;
+    f->len = (size_t)(e - s);
+    f->eol = eol;
+}
+
+QUILL_INLINE int quill_next(quill_parser *p, quill_field *f)
+{
+    if (p->ip < p->ie) {
+        const char *e = p->base + *p->ip++;
+        quill_i_emit(p, f, e, (unsigned char)*e != p->delim);
+        return QUILL_FIELD;
+    }
+    return quill_i_next_slow(p, f);
+}
+
+QUILL_INLINE const char *quill_value(const quill_field *f, char *dst, size_t *len)
+{
+    if (!f->quoted) {
+        *len = f->len;
+        return f->ptr;
+    }
+    return quill_i_unescape(f, dst, len);
+}
 
 #ifdef __cplusplus
 }
@@ -137,30 +175,8 @@ static void quill_i_scan(quill_parser *p)
     p->scan = (const char *)s;
 }
 
-static void quill_i_emit(quill_parser *p, quill_field *f, const char *e, int eol)
+int quill_i_next_slow(quill_parser *p, quill_field *f)
 {
-    const char *s = p->field;
-    p->field = e + 1;
-    if (eol && e > s && e[-1] == '\r')
-        e--;
-    f->quoted = *s == '"';
-    if (f->quoted) {
-        s++;
-        if (e[-1] == '"')
-            e--;
-    }
-    f->ptr = s;
-    f->len = (size_t)(e - s);
-    f->eol = eol;
-}
-
-int quill_next(quill_parser *p, quill_field *f)
-{
-    if (p->ip < p->ie) {
-        const char *e = p->base + *p->ip++;
-        quill_i_emit(p, f, e, (unsigned char)*e != p->delim);
-        return QUILL_FIELD;
-    }
     while (p->scan < p->end) {
         quill_i_scan(p);
         if (p->n) {
@@ -182,15 +198,11 @@ int quill_next(quill_parser *p, quill_field *f)
     return QUILL_END;
 }
 
-const char *quill_value(const quill_field *f, char *dst, size_t *len)
+const char *quill_i_unescape(const quill_field *f, char *dst, size_t *len)
 {
     const char *s = f->ptr, *e = f->ptr + f->len, *q;
     char *d = dst;
     int in = 1;
-    if (!f->quoted) {
-        *len = f->len;
-        return f->ptr;
-    }
     while ((q = (const char *)memchr(s, '"', (size_t)(e - s))) != NULL) {
         memcpy(d, s, (size_t)(q - s));
         d += q - s;
