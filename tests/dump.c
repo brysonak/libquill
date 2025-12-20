@@ -38,6 +38,14 @@ static void emit(const quill_field *f)
         fputs("]\n", stdout);
 }
 
+static int finish(void)
+{
+    if (row_open)
+        fputs("]\n", stdout);
+    free(scratch);
+    return 0;
+}
+
 static char *load(FILE *f, size_t *len)
 {
     size_t cap = 1 << 20, n = 0;
@@ -57,28 +65,82 @@ static char *load(FILE *f, size_t *len)
     return ferror(f) ? (free(s), (char *)NULL) : s;
 }
 
+static int usage(void)
+{
+    fputs("usage: dump [-m whole|stream:N] FILE\n", stderr);
+    return 2;
+}
+
 int main(int argc, char **argv)
 {
     static quill_parser p;
     quill_field f;
-    size_t len;
-    char *buf;
+    const char *mode = "whole", *path = NULL;
+    int rc, i;
+    size_t n = 0;
     FILE *in;
-    if (argc != 2 || !(in = fopen(argv[1], "rb"))) {
-        fputs("usage: dump FILE\n", stderr);
-        return 2;
+
+    for (i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-m") && i + 1 < argc) {
+            mode = argv[++i];
+        } else if (argv[i][0] != '-' && !path) {
+            path = argv[i];
+        } else {
+            return usage();
+        }
     }
-    buf = load(in, &len);
-    fclose(in);
-    if (!buf)
-        return 2;
-    quill_init(&p, ',');
-    quill_feed(&p, buf, len, 1);
-    while (quill_next(&p, &f) == QUILL_FIELD)
-        emit(&f);
-    if (row_open)
-        fputs("]\n", stdout);
-    free(scratch);
-    free(buf);
-    return 0;
+    if (!path || !(in = fopen(path, "rb")))
+        return usage();
+    if (!strncmp(mode, "stream:", 7))
+        n = (size_t)strtoul(mode + 7, NULL, 10);
+    if (strcmp(mode, "whole") && !n)
+        return usage();
+
+    if (!strncmp(mode, "stream:", 7)) {
+        size_t cap = n, have = 0;
+        char *buf = (char *)malloc(cap);
+        if (!buf)
+            return 2;
+        quill_init(&p, ',');
+        for (;;) {
+            size_t want, got;
+            int final;
+            if (have == cap) {
+                char *t = (char *)realloc(buf, cap *= 2);
+                if (!t)
+                    return 2;
+                buf = t;
+            }
+            want = cap - have < n ? cap - have : n;
+            got = fread(buf + have, 1, want, in);
+            if (ferror(in))
+                return 2;
+            have += got;
+            final = got < want;
+            quill_feed(&p, buf, have, final);
+            while ((rc = quill_next(&p, &f)) == QUILL_FIELD)
+                emit(&f);
+            if (rc != QUILL_MORE)
+                break;
+            have -= (size_t)(p.field - buf);
+            memmove(buf, p.field, have);
+        }
+        free(buf);
+        fclose(in);
+        return finish();
+    }
+
+    {
+        size_t len;
+        char *buf = load(in, &len);
+        fclose(in);
+        if (!buf)
+            return 2;
+        quill_init(&p, ',');
+        quill_feed(&p, buf, len, 1);
+        while ((rc = quill_next(&p, &f)) == QUILL_FIELD)
+            emit(&f);
+        free(buf);
+        return finish();
+    }
 }
