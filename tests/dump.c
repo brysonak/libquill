@@ -95,6 +95,7 @@ int main(int argc, char **argv)
         n = (size_t)strtoul(mode + 7, NULL, 10);
     if (strcmp(mode, "whole") && !n)
         return usage();
+    setvbuf(stdout, NULL, _IOFBF, 1 << 16);
 
     if (!strncmp(mode, "stream:", 7)) {
         size_t cap = n, have = 0;
