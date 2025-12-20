@@ -25,12 +25,16 @@ typedef struct {
     int eol;
 } quill_field;
 
+typedef struct {
+    uint64_t inq;
+} quill_i_state;
+
 typedef struct quill_parser {
     const char *buf, *end, *scan, *field, *base;
     const uint32_t *ip, *ie;
     uint32_t n;
     unsigned char delim, final, done;
-    uint64_t inq;
+    quill_i_state st;
     uint32_t idx[QUILL_I_CAP];
 } quill_parser;
 
@@ -122,15 +126,16 @@ QUILL_I_INLINE void quill_i_index(uint32_t **out, uint32_t off, uint64_t s)
     *out = o;
 }
 
-QUILL_I_INLINE void quill_i_block(uint64_t *inq, uint32_t **out, uint32_t off, uint64_t pq, uint64_t d, uint64_t n)
+QUILL_I_INLINE void quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off, uint64_t pq, uint64_t d, uint64_t n)
 {
-    pq ^= *inq;
-    *inq = 0 - (pq >> 63);
+    pq ^= t->inq;
+    t->inq = 0 - (pq >> 63);
     quill_i_index(out, off, (d | n) & ~pq);
 }
 
 static size_t quill_i_run_scalar(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off)
 {
+    quill_i_state t = p->st;
     uint32_t *o = p->idx + p->n;
     size_t k;
     for (k = 0; k < nb; k++, s += 64, off += 64) {
@@ -141,8 +146,9 @@ static size_t quill_i_run_scalar(quill_parser *p, const unsigned char *s, size_t
             delim |= (uint64_t)(s[i] == p->delim) << i;
             nl |= (uint64_t)(s[i] == '\n') << i;
         }
-        quill_i_block(&p->inq, &o, off, quill_i_prefix_xor(quote), delim, nl);
+        quill_i_block(&t, &o, off, quill_i_prefix_xor(quote), delim, nl);
     }
+    p->st = t;
     p->n = (uint32_t)(o - p->idx);
     return k;
 }
