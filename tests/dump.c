@@ -90,7 +90,7 @@ int main(int argc, char **argv)
         }
     }
     if (!path || !(in = fopen(path, "rb")))
-        return usage();
+        return path ? (fprintf(stderr, "cannot open %s\n", path), 2) : usage();
     if (!strncmp(mode, "stream:", 7))
         n = (size_t)strtoul(mode + 7, NULL, 10);
     if (strcmp(mode, "whole") && !n)
