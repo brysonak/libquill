@@ -122,8 +122,8 @@ int main(int argc, char **argv)
                 emit(&f);
             if (rc != QUILL_MORE)
                 break;
-            have -= (size_t)(p.field - buf);
-            memmove(buf, p.field, have);
+            have -= quill_consumed(&p);
+            memmove(buf, buf + quill_consumed(&p), have);
         }
         free(buf);
         fclose(in);

@@ -66,6 +66,11 @@ QUILL_INLINE int quill_next(quill_parser *p, quill_field *f)
     return quill_i_next_slow(p, f);
 }
 
+QUILL_INLINE size_t quill_consumed(const quill_parser *p)
+{
+    return (size_t)(p->field - p->buf);
+}
+
 /* Points into the input when nothing needs unescaping, else into dst */
 QUILL_INLINE const char *quill_value(const quill_field *f, char *dst, size_t *len)
 {
