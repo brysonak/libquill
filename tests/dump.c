@@ -73,7 +73,7 @@ int main(int argc, char **argv)
     if (!buf)
         return 2;
     quill_init(&p, ',');
-    quill_feed(&p, buf, len);
+    quill_feed(&p, buf, len, 1);
     while (quill_next(&p, &f) == QUILL_FIELD)
         emit(&f);
     if (row_open)

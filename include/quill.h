@@ -16,7 +16,7 @@ extern "C" {
 
 #define QUILL_INLINE static inline
 
-enum { QUILL_END = 0, QUILL_FIELD = 1 };
+enum { QUILL_END = 0, QUILL_FIELD = 1, QUILL_MORE = 2 };
 
 typedef struct {
     const char *ptr;
@@ -29,13 +29,13 @@ typedef struct quill_parser {
     const char *buf, *end, *scan, *field, *base;
     const uint32_t *ip, *ie;
     uint32_t n;
-    unsigned char delim, done;
+    unsigned char delim, final, done;
     uint64_t inq;
     uint32_t idx[QUILL_I_CAP];
 } quill_parser;
 
 int quill_init(quill_parser *p, char delim);
-void quill_feed(quill_parser *p, const char *buf, size_t len);
+void quill_feed(quill_parser *p, const char *buf, size_t len, int final);
 int quill_i_next_slow(quill_parser *p, quill_field *f);
 const char *quill_i_unescape(const quill_field *f, char *dst, size_t *len);
 
@@ -149,10 +149,13 @@ int quill_init(quill_parser *p, char delim)
     return 0;
 }
 
-void quill_feed(quill_parser *p, const char *buf, size_t len)
+void quill_feed(quill_parser *p, const char *buf, size_t len, int final)
 {
-    p->buf = p->field = p->scan = buf;
+    size_t keep = p->buf ? (size_t)(p->scan - p->field) : 0;
+    p->buf = p->field = buf;
+    p->scan = buf + keep;
     p->end = buf + len;
+    p->final = (unsigned char)(final != 0);
     p->n = 0;
     p->ip = p->ie = p->idx;
     if (len >= 3 && memcmp(buf, "\xEF\xBB\xBF", 3) == 0)
@@ -170,7 +173,7 @@ static void quill_i_scan(quill_parser *p)
     p->ip = p->ie = p->idx;
     k = quill_i_run_scalar(p, s, nb, 0);
     s += 64 * k;
-    if (k == nb && s < end && (size_t)(end - s) < 64) {
+    if (k == nb && p->final && s < end && (size_t)(end - s) < 64) {
         unsigned char pad[64] = {0};
         size_t rem = (size_t)(end - s);
         memcpy(pad, s, rem);
@@ -182,7 +185,7 @@ static void quill_i_scan(quill_parser *p)
 
 int quill_i_next_slow(quill_parser *p, quill_field *f)
 {
-    while (p->scan < p->end) {
+    while (p->final ? p->scan < p->end : p->end - p->scan >= 64) {
         quill_i_scan(p);
         if (p->n) {
             p->ip = p->idx + 1;
@@ -192,6 +195,8 @@ int quill_i_next_slow(quill_parser *p, quill_field *f)
             return QUILL_FIELD;
         }
     }
+    if (!p->final)
+        return QUILL_MORE;
     if (p->done)
         return QUILL_END;
     p->done = 1;
