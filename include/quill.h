@@ -144,12 +144,14 @@ QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off,
         uint64_t close = q & ~pq;
         uint64_t pclose = close << 1 | t->close;
         uint64_t b1 = q & pq & ~(s << 1 | t->sep | pclose);
-        uint64_t bad = b1;
+        uint64_t b2 = pclose & ~(q | d | n);
+        uint64_t bad = b1 | b2;
         t->sep = s >> 63;
         t->close = close >> 63;
         if (bad) {
+            uint64_t low = bad & (0 - bad);
             t->err_at = t->gbase + off + quill_i_ctz(bad);
-            t->err = "quote in unquoted field";
+            t->err = (b1 & low) ? "quote in unquoted field" : "junk after closing quote";
         }
     }
     quill_i_index(out, off, s);
