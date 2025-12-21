@@ -16,7 +16,8 @@ extern "C" {
 
 #define QUILL_INLINE static inline
 
-enum { QUILL_END = 0, QUILL_FIELD = 1, QUILL_MORE = 2 };
+enum { QUILL_ERROR = -1, QUILL_END = 0, QUILL_FIELD = 1, QUILL_MORE = 2 };
+enum { QUILL_STRICT = 1 };
 
 typedef struct {
     const char *ptr;
@@ -26,19 +27,25 @@ typedef struct {
 } quill_field;
 
 typedef struct {
-    uint64_t inq;
+    uint64_t inq, sep, close;
+    uint64_t gbase, err_at;
+    const char *err;
+    int strict;
 } quill_i_state;
 
 typedef struct quill_parser {
     const char *buf, *end, *scan, *field, *base;
     const uint32_t *ip, *ie;
+    uint64_t off0;
     uint32_t n;
     unsigned char delim, final, done;
     quill_i_state st;
+    uint64_t err_offset;
+    const char *err_msg;
     uint32_t idx[QUILL_I_CAP];
 } quill_parser;
 
-int quill_init(quill_parser *p, char delim);
+int quill_init(quill_parser *p, char delim, int flags);
 void quill_feed(quill_parser *p, const char *buf, size_t len, int final);
 int quill_i_next_slow(quill_parser *p, quill_field *f);
 const char *quill_i_unescape(const quill_field *f, char *dst, size_t *len);
@@ -126,11 +133,27 @@ QUILL_I_INLINE void quill_i_index(uint32_t **out, uint32_t off, uint64_t s)
     *out = o;
 }
 
-QUILL_I_INLINE void quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off, uint64_t pq, uint64_t d, uint64_t n)
+QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off, uint64_t q, uint64_t pq, uint64_t d,
+                                 uint64_t n)
 {
+    uint64_t s;
     pq ^= t->inq;
     t->inq = 0 - (pq >> 63);
-    quill_i_index(out, off, (d | n) & ~pq);
+    s = (d | n) & ~pq;
+    if (t->strict) {
+        uint64_t close = q & ~pq;
+        uint64_t pclose = close << 1 | t->close;
+        uint64_t b1 = q & pq & ~(s << 1 | t->sep | pclose);
+        uint64_t bad = b1;
+        t->sep = s >> 63;
+        t->close = close >> 63;
+        if (bad) {
+            t->err_at = t->gbase + off + quill_i_ctz(bad);
+            t->err = "quote in unquoted field";
+        }
+    }
+    quill_i_index(out, off, s);
+    return t->err ? 1 : 0;
 }
 
 static size_t quill_i_run_scalar(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off)
@@ -146,23 +169,30 @@ static size_t quill_i_run_scalar(quill_parser *p, const unsigned char *s, size_t
             delim |= (uint64_t)(s[i] == p->delim) << i;
             nl |= (uint64_t)(s[i] == '\n') << i;
         }
-        quill_i_block(&t, &o, off, quill_i_prefix_xor(quote), delim, nl);
+        if (quill_i_block(&t, &o, off, quote, quill_i_prefix_xor(quote), delim, nl)) {
+            k++;
+            break;
+        }
     }
     p->st = t;
     p->n = (uint32_t)(o - p->idx);
     return k;
 }
 
-int quill_init(quill_parser *p, char delim)
+int quill_init(quill_parser *p, char delim, int flags)
 {
     memset(p, 0, offsetof(quill_parser, idx));
     p->delim = (unsigned char)delim;
+    p->st.sep = 1;
+    p->st.strict = (flags & QUILL_STRICT) != 0;
     return 0;
 }
 
 void quill_feed(quill_parser *p, const char *buf, size_t len, int final)
 {
     size_t keep = p->buf ? (size_t)(p->scan - p->field) : 0;
+    if (p->buf)
+        p->off0 += (uint64_t)(p->field - p->buf);
     p->buf = p->field = buf;
     p->scan = buf + keep;
     p->end = buf + len;
@@ -182,9 +212,10 @@ static void quill_i_scan(quill_parser *p)
     p->base = (const char *)s;
     p->n = 0;
     p->ip = p->ie = p->idx;
+    p->st.gbase = p->off0 + (uint64_t)((const char *)s - p->buf);
     k = quill_i_run_scalar(p, s, nb, 0);
     s += 64 * k;
-    if (k == nb && p->final && s < end && (size_t)(end - s) < 64) {
+    if (k == nb && p->final && !p->st.err && s < end && (size_t)(end - s) < 64) {
         unsigned char pad[64] = {0};
         size_t rem = (size_t)(end - s);
         memcpy(pad, s, rem);
@@ -194,8 +225,20 @@ static void quill_i_scan(quill_parser *p)
     p->scan = (const char *)s;
 }
 
+static int quill_i_fail(quill_parser *p, uint64_t at, const char *msg)
+{
+    p->err_offset = at;
+    p->err_msg = msg;
+    p->done = 1;
+    return QUILL_ERROR;
+}
+
 int quill_i_next_slow(quill_parser *p, quill_field *f)
 {
+    if (p->err_msg)
+        return QUILL_ERROR;
+    if (p->st.err)
+        return quill_i_fail(p, p->st.err_at, p->st.err);
     while (p->final ? p->scan < p->end : p->end - p->scan >= 64) {
         quill_i_scan(p);
         if (p->n) {
@@ -205,6 +248,8 @@ int quill_i_next_slow(quill_parser *p, quill_field *f)
             quill_i_emit(p, f, e, (unsigned char)*e != p->delim);
             return QUILL_FIELD;
         }
+        if (p->st.err)
+            return quill_i_fail(p, p->st.err_at, p->st.err);
     }
     if (!p->final)
         return QUILL_MORE;

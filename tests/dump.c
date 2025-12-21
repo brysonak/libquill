@@ -102,7 +102,7 @@ int main(int argc, char **argv)
         char *buf = (char *)malloc(cap);
         if (!buf)
             return 2;
-        quill_init(&p, ',');
+        quill_init(&p, ',', 0);
         for (;;) {
             size_t want, got;
             int final;
@@ -137,7 +137,7 @@ int main(int argc, char **argv)
         fclose(in);
         if (!buf)
             return 2;
-        quill_init(&p, ',');
+        quill_init(&p, ',', 0);
         quill_feed(&p, buf, len, 1);
         while ((rc = quill_next(&p, &f)) == QUILL_FIELD)
             emit(&f);
