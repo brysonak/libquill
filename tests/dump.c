@@ -38,11 +38,13 @@ static void emit(const quill_field *f)
         fputs("]\n", stdout);
 }
 
-static int finish(void)
+static int finish(const quill_parser *p, int rc)
 {
     if (row_open)
         fputs("]\n", stdout);
     free(scratch);
+    if (rc == QUILL_ERROR)
+        printf("!error %llu %s\n", (unsigned long long)p->err_offset, p->err_msg);
     return 0;
 }
 
@@ -67,7 +69,7 @@ static char *load(FILE *f, size_t *len)
 
 static int usage(void)
 {
-    fputs("usage: dump [-m whole|stream:N] FILE\n", stderr);
+    fputs("usage: dump [-s] [-m whole|stream:N] FILE\n", stderr);
     return 2;
 }
 
@@ -76,12 +78,14 @@ int main(int argc, char **argv)
     static quill_parser p;
     quill_field f;
     const char *mode = "whole", *path = NULL;
-    int rc, i;
+    int strict = 0, rc, i;
     size_t n = 0;
     FILE *in;
 
     for (i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "-m") && i + 1 < argc) {
+        if (!strcmp(argv[i], "-s")) {
+            strict = QUILL_STRICT;
+        } else if (!strcmp(argv[i], "-m") && i + 1 < argc) {
             mode = argv[++i];
         } else if (argv[i][0] != '-' && !path) {
             path = argv[i];
@@ -102,7 +106,7 @@ int main(int argc, char **argv)
         char *buf = (char *)malloc(cap);
         if (!buf)
             return 2;
-        quill_init(&p, ',', 0);
+        quill_init(&p, ',', strict);
         for (;;) {
             size_t want, got;
             int final;
@@ -128,7 +132,7 @@ int main(int argc, char **argv)
         }
         free(buf);
         fclose(in);
-        return finish();
+        return finish(&p, rc);
     }
 
     {
@@ -137,11 +141,11 @@ int main(int argc, char **argv)
         fclose(in);
         if (!buf)
             return 2;
-        quill_init(&p, ',', 0);
+        quill_init(&p, ',', strict);
         quill_feed(&p, buf, len, 1);
         while ((rc = quill_next(&p, &f)) == QUILL_FIELD)
             emit(&f);
         free(buf);
-        return finish();
+        return finish(&p, rc);
     }
 }
