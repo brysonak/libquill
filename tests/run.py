@@ -8,19 +8,35 @@ CSV_DIR = os.path.join(HERE, "csv")
 MODES = ["whole", "stream:1", "stream:7", "stream:64", "stream:4096"]
 
 
-def dump(build, path, mode="whole"):
-    out = subprocess.run([os.path.join(build, "dump"), "-m", mode, path], capture_output=True, check=True).stdout
-    return [json.loads(line) for line in out.decode().splitlines()]
+def dump(build, path, mode="whole", strict=False):
+    args = [os.path.join(build, "dump"), "-m", mode]
+    args += ["-s"] if strict else []
+    out = subprocess.run(args + [path], capture_output=True, check=True).stdout.decode()
+    rows, error = [], None
+    for line in out.splitlines():
+        if line.startswith("!error "):
+            ln, col, msg = line[7:].split(" ", 2)
+            error = [int(ln), int(col), msg]
+        else:
+            rows.append(json.loads(line))
+    return rows, error
 
 
 def check(build, path, failures):
     with open(path[:-4] + ".json", encoding="utf-8") as f:
-        want = [[cell.encode("utf-8").decode("latin-1") for cell in row] for row in json.load(f)["rows"]]
+        exp = json.load(f)
+    want = [[cell.encode("utf-8").decode("latin-1") for cell in row] for row in exp["rows"]]
+    want_err = exp["strict_error"]
     for mode in MODES:
-        rows = dump(build, path, mode)
-        if rows != want:
-            failures.append(f"{os.path.basename(path)} {mode}: got {rows}")
-    return len(MODES)
+        rows, err = dump(build, path, mode)
+        if rows != want or err:
+            failures.append(f"{os.path.basename(path)} lenient {mode}: got {rows} {err}")
+        rows, err = dump(build, path, mode, strict=True)
+        if want_err is None and (rows != want or err):
+            failures.append(f"{os.path.basename(path)} strict {mode}: got {rows} {err}")
+        elif want_err is not None and err != want_err:
+            failures.append(f"{os.path.basename(path)} strict {mode}: error {err}, want {want_err}")
+    return len(MODES) * 2
 
 
 def test(build):
