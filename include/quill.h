@@ -155,6 +155,8 @@ QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off,
         t->close = close >> 63;
         if (bad) {
             uint64_t low = bad & (0 - bad);
+            s &= low - 1;
+            n &= low - 1;
             t->err_at = t->gbase + off + quill_i_ctz(bad);
             t->err = (b1 & low) ? "quote in unquoted field" : "junk after closing quote";
         }

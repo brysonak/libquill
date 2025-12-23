@@ -1,0 +1,21 @@
+{
+ "rows": [
+  [
+   "ok",
+   "fine"
+  ],
+  [
+   "bad",
+   "xy"
+  ],
+  [
+   "still",
+   "good"
+  ]
+ ],
+ "strict_error": [
+  2,
+  8,
+  "junk after closing quote"
+ ]
+}
