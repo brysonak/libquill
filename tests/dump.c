@@ -44,7 +44,7 @@ static int finish(const quill_parser *p, int rc)
         fputs("]\n", stdout);
     free(scratch);
     if (rc == QUILL_ERROR)
-        printf("!error %llu %s\n", (unsigned long long)p->err_offset, p->err_msg);
+        printf("!error %llu %llu %s\n", (unsigned long long)p->err_line, (unsigned long long)p->err_col, p->err_msg);
     return 0;
 }
 

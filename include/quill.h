@@ -28,7 +28,7 @@ typedef struct {
 
 typedef struct {
     uint64_t inq, sep, close;
-    uint64_t gbase, err_at;
+    uint64_t lines, nl_mask, nl_at, gbase, err_at;
     const char *err;
     int strict;
 } quill_i_state;
@@ -40,7 +40,7 @@ typedef struct quill_parser {
     uint32_t n;
     unsigned char delim, final, done;
     quill_i_state st;
-    uint64_t err_offset;
+    uint64_t err_line, err_col, err_offset;
     const char *err_msg;
     uint32_t idx[QUILL_I_CAP];
 } quill_parser;
@@ -107,6 +107,11 @@ QUILL_INLINE const char *quill_value(const quill_field *f, char *dst, size_t *le
 #define QUILL_I_INLINE static inline
 #endif
 
+QUILL_I_INLINE unsigned quill_i_popcount(uint64_t x)
+{
+    return (unsigned)__builtin_popcountll(x);
+}
+
 QUILL_I_INLINE unsigned quill_i_ctz(uint64_t x)
 {
     return (unsigned)__builtin_ctzll(x);
@@ -152,6 +157,11 @@ QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off,
             uint64_t low = bad & (0 - bad);
             t->err_at = t->gbase + off + quill_i_ctz(bad);
             t->err = (b1 & low) ? "quote in unquoted field" : "junk after closing quote";
+        }
+        t->lines += quill_i_popcount(n);
+        if (n) {
+            t->nl_mask = n;
+            t->nl_at = t->gbase + off;
         }
     }
     quill_i_index(out, off, s);
@@ -229,7 +239,16 @@ static void quill_i_scan(quill_parser *p)
 
 static int quill_i_fail(quill_parser *p, uint64_t at, const char *msg)
 {
+    uint64_t m = p->st.nl_mask, start = 0;
+    if (m) {
+        unsigned b = 63;
+        while (!(m >> b & 1))
+            b--;
+        start = p->st.nl_at + b + 1;
+    }
     p->err_offset = at;
+    p->err_line = p->st.lines + 1;
+    p->err_col = at - start + 1;
     p->err_msg = msg;
     p->done = 1;
     return QUILL_ERROR;
