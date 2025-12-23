@@ -1,0 +1,13 @@
+{
+ "rows": [
+  [
+   "a",
+   "b\nc\n"
+  ]
+ ],
+ "strict_error": [
+  3,
+  1,
+  "unterminated quoted field"
+ ]
+}

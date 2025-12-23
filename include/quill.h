@@ -277,6 +277,8 @@ int quill_i_next_slow(quill_parser *p, quill_field *f)
     if (p->done)
         return QUILL_END;
     p->done = 1;
+    if (p->st.strict && p->st.inq)
+        return quill_i_fail(p, p->off0 + (uint64_t)(p->end - p->buf), "unterminated quoted field");
     if (p->field < p->end || (p->field > p->buf && p->field[-1] == p->delim)) {
         quill_i_emit(p, f, p->end, 1);
         p->field = p->end;
