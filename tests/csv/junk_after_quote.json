@@ -1,0 +1,13 @@
+{
+ "rows": [
+  [
+   "ab",
+   "c"
+  ]
+ ],
+ "strict_error": [
+  1,
+  4,
+  "junk after closing quote"
+ ]
+}
