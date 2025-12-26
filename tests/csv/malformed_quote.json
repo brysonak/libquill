@@ -1,0 +1,13 @@
+{
+ "rows": [
+  [
+   "a",
+   "b\"c,d\n\"x\"y,z\n"
+  ]
+ ],
+ "strict_error": [
+  1,
+  4,
+  "quote in unquoted field"
+ ]
+}
