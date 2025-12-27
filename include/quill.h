@@ -139,7 +139,7 @@ QUILL_I_INLINE void quill_i_index(uint32_t **out, uint32_t off, uint64_t s)
 }
 
 QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off, uint64_t q, uint64_t pq, uint64_t d,
-                                 uint64_t n)
+                                 uint64_t n, uint64_t r)
 {
     uint64_t s;
     pq ^= t->inq;
@@ -149,7 +149,7 @@ QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off,
         uint64_t close = q & ~pq;
         uint64_t pclose = close << 1 | t->close;
         uint64_t b1 = q & pq & ~(s << 1 | t->sep | pclose);
-        uint64_t b2 = pclose & ~(q | d | n);
+        uint64_t b2 = pclose & ~(q | d | n | r);
         uint64_t bad = b1 | b2;
         t->sep = s >> 63;
         t->close = close >> 63;
@@ -176,14 +176,15 @@ static size_t quill_i_run_scalar(quill_parser *p, const unsigned char *s, size_t
     uint32_t *o = p->idx + p->n;
     size_t k;
     for (k = 0; k < nb; k++, s += 64, off += 64) {
-        uint64_t quote = 0, delim = 0, nl = 0;
+        uint64_t quote = 0, delim = 0, nl = 0, cr = 0;
         unsigned i;
         for (i = 0; i < 64; i++) {
             quote |= (uint64_t)(s[i] == '"') << i;
             delim |= (uint64_t)(s[i] == p->delim) << i;
             nl |= (uint64_t)(s[i] == '\n') << i;
+            cr |= (uint64_t)(s[i] == '\r') << i;
         }
-        if (quill_i_block(&t, &o, off, quote, quill_i_prefix_xor(quote), delim, nl)) {
+        if (quill_i_block(&t, &o, off, quote, quill_i_prefix_xor(quote), delim, nl, cr)) {
             k++;
             break;
         }
