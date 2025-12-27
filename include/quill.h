@@ -27,7 +27,7 @@ typedef struct {
 } quill_field;
 
 typedef struct {
-    uint64_t inq, sep, close;
+    uint64_t inq, sep, close, cr;
     uint64_t lines, nl_mask, nl_at, gbase, err_at;
     const char *err;
     int strict;
@@ -146,19 +146,21 @@ QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off,
     t->inq = 0 - (pq >> 63);
     s = (d | n) & ~pq;
     if (t->strict) {
-        uint64_t close = q & ~pq;
+        uint64_t close = q & ~pq, crout = r & ~pq;
         uint64_t pclose = close << 1 | t->close;
         uint64_t b1 = q & pq & ~(s << 1 | t->sep | pclose);
         uint64_t b2 = pclose & ~(q | d | n | r);
-        uint64_t bad = b1 | b2;
+        uint64_t b3 = (crout << 1 | t->cr) & ~n;
+        uint64_t bad = b1 | b2 | b3;
         t->sep = s >> 63;
         t->close = close >> 63;
+        t->cr = crout >> 63;
         if (bad) {
             uint64_t low = bad & (0 - bad);
             s &= low - 1;
             n &= low - 1;
             t->err_at = t->gbase + off + quill_i_ctz(bad);
-            t->err = (b1 & low) ? "quote in unquoted field" : "junk after closing quote";
+            t->err = (b1 & low) ? "quote in unquoted field" : (b2 & low) ? "junk after closing quote" : "bare CR";
         }
         t->lines += quill_i_popcount(n);
         if (n) {
@@ -280,8 +282,13 @@ int quill_i_next_slow(quill_parser *p, quill_field *f)
     if (p->done)
         return QUILL_END;
     p->done = 1;
-    if (p->st.strict && p->st.inq)
-        return quill_i_fail(p, p->off0 + (uint64_t)(p->end - p->buf), "unterminated quoted field");
+    if (p->st.strict) {
+        uint64_t at = p->off0 + (uint64_t)(p->end - p->buf);
+        if (p->st.inq)
+            return quill_i_fail(p, at, "unterminated quoted field");
+        if (p->end > p->buf && p->end[-1] == '\r')
+            return quill_i_fail(p, at, "bare CR");
+    }
     if (p->field < p->end || (p->field > p->buf && p->field[-1] == p->delim)) {
         quill_i_emit(p, f, p->end, 1);
         p->field = p->end;
