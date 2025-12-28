@@ -8,6 +8,6 @@
  "strict_error": [
   1,
   4,
-  "junk after closing quote"
+  "unexpected byte after closing quote"
  ]
 }

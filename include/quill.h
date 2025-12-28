@@ -160,7 +160,9 @@ QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off,
             s &= low - 1;
             n &= low - 1;
             t->err_at = t->gbase + off + quill_i_ctz(bad);
-            t->err = (b1 & low) ? "quote in unquoted field" : (b2 & low) ? "junk after closing quote" : "bare CR";
+            t->err = (b1 & low) ? "quote inside unquoted field"
+                   : (b2 & low) ? "unexpected byte after closing quote"
+                                : "carriage return not followed by newline";
         }
         t->lines += quill_i_popcount(n);
         if (n) {
@@ -287,7 +289,7 @@ int quill_i_next_slow(quill_parser *p, quill_field *f)
         if (p->st.inq)
             return quill_i_fail(p, at, "unterminated quoted field");
         if (p->end > p->buf && p->end[-1] == '\r')
-            return quill_i_fail(p, at, "bare CR");
+            return quill_i_fail(p, at, "carriage return not followed by newline");
     }
     if (p->field < p->end || (p->field > p->buf && p->field[-1] == p->delim)) {
         quill_i_emit(p, f, p->end, 1);

@@ -8,6 +8,6 @@
  "strict_error": [
   1,
   4,
-  "quote in unquoted field"
+  "quote inside unquoted field"
  ]
 }

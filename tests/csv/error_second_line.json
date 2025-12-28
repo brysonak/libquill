@@ -16,6 +16,6 @@
  "strict_error": [
   2,
   8,
-  "junk after closing quote"
+  "unexpected byte after closing quote"
  ]
 }
