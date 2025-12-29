@@ -20,9 +20,9 @@ enum { QUILL_ERROR = -1, QUILL_END = 0, QUILL_FIELD = 1, QUILL_MORE = 2 };
 enum { QUILL_STRICT = 1 };
 
 typedef struct {
-    const char *ptr;
+    const char *ptr; /* raw bytes, outer quotes removed */
     size_t len;
-    int quoted;
+    int quoted; /* may hold "" escapes  */
     int eol;
 } quill_field;
 
