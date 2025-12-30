@@ -117,7 +117,7 @@ QUILL_I_INLINE unsigned quill_i_ctz(uint64_t x)
     return (unsigned)__builtin_ctzll(x);
 }
 
-QUILL_I_INLINE uint64_t quill_i_prefix_xor(uint64_t m)
+QUILL_I_INLINE uint64_t quill_i_pxor(uint64_t m)
 {
     m ^= m << 1;
     m ^= m << 2;
@@ -180,15 +180,15 @@ static size_t quill_i_run_scalar(quill_parser *p, const unsigned char *s, size_t
     uint32_t *o = p->idx + p->n;
     size_t k;
     for (k = 0; k < nb; k++, s += 64, off += 64) {
-        uint64_t quote = 0, delim = 0, nl = 0, cr = 0;
+        uint64_t q = 0, d = 0, n = 0, r = 0;
         unsigned i;
         for (i = 0; i < 64; i++) {
-            quote |= (uint64_t)(s[i] == '"') << i;
-            delim |= (uint64_t)(s[i] == p->delim) << i;
-            nl |= (uint64_t)(s[i] == '\n') << i;
-            cr |= (uint64_t)(s[i] == '\r') << i;
+            q |= (uint64_t)(s[i] == '"') << i;
+            d |= (uint64_t)(s[i] == p->delim) << i;
+            n |= (uint64_t)(s[i] == '\n') << i;
+            r |= (uint64_t)(s[i] == '\r') << i;
         }
-        if (quill_i_block(&t, &o, off, quote, quill_i_prefix_xor(quote), delim, nl, cr)) {
+        if (quill_i_block(&t, &o, off, q, quill_i_pxor(q), d, n, r)) {
             k++;
             break;
         }
