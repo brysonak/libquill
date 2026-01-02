@@ -206,7 +206,7 @@ static void check(const unsigned char *s, size_t len, char delim, int strict)
 int main(void)
 {
     static unsigned char buf[400];
-    static const unsigned char alpha[] = {'a', 'b', ',', ';', '\t', '"', '"', '\n', '\r'};
+    static const unsigned char alpha[] = {'a', 'b', ',', ';', '\t', '"', '"', '\n', '\r', 0, 0xEF, 0xBB, 0xBF};
     int i;
 
     for (i = 0; i < 20000; i++) {
