@@ -145,29 +145,61 @@ static void finish(quill_parser *p, int rc, result *r)
     }
 }
 
-static void parse(const unsigned char *s, size_t len, char delim, int strict, result *r)
+static void parse(const unsigned char *s, size_t len, char delim, int strict, size_t chunk, result *r)
 {
     quill_field f;
     int rc;
     assert(quill_init(&P, delim, strict ? QUILL_STRICT : 0) == 0);
-    quill_feed(&P, (const char *)s, len, 1);
-    while ((rc = quill_next(&P, &f)) == QUILL_FIELD)
-        collect(&f, r);
-    assert(rc != QUILL_MORE);
-    finish(&P, rc, r);
+    if (!chunk) {
+        quill_feed(&P, (const char *)s, len, 1);
+        while ((rc = quill_next(&P, &f)) == QUILL_FIELD)
+            collect(&f, r);
+        assert(rc != QUILL_MORE);
+        finish(&P, rc, r);
+        return;
+    }
+    {
+        char *buf = (char *)malloc(len + 1);
+        size_t have = 0, pos = 0;
+        for (;;) {
+            size_t take = 1 + (size_t)(next_rand() % chunk);
+            int final;
+            if (take > len - pos)
+                take = len - pos;
+            memcpy(buf + have, s + pos, take);
+            have += take;
+            pos += take;
+            final = pos == len;
+            quill_feed(&P, buf, have, final);
+            while ((rc = quill_next(&P, &f)) == QUILL_FIELD)
+                collect(&f, r);
+            if (rc != QUILL_MORE)
+                break;
+            assert(!final);
+            have -= quill_consumed(&P);
+            memmove(buf, buf + quill_consumed(&P), have);
+        }
+        finish(&P, rc, r);
+        free(buf);
+    }
 }
 
 static void check(const unsigned char *s, size_t len, char delim, int strict)
 {
-    result want = {0}, got = {0};
+    result want = {0};
+    size_t c;
+    static const size_t chunks[] = {0, 1, 7, 64, 200, 5000};
     oracle(s, len, (unsigned char)delim, strict, &want);
-    parse(s, len, delim, strict, &got);
-    if (got.n != want.n || (want.n && memcmp(got.b, want.b, want.n)) || !got.msg != !want.msg
-        || (want.msg && strcmp(got.msg, want.msg)) || got.line != want.line || got.col != want.col) {
-        fprintf(stderr, "mismatch: strict %d len %zu\n", strict, len);
-        abort();
+    for (c = 0; c < sizeof chunks / sizeof chunks[0]; c++) {
+        result got = {0};
+        parse(s, len, delim, strict, chunks[c], &got);
+        if (got.n != want.n || (want.n && memcmp(got.b, want.b, want.n)) || !got.msg != !want.msg
+            || (want.msg && strcmp(got.msg, want.msg)) || got.line != want.line || got.col != want.col) {
+            fprintf(stderr, "mismatch: chunk %zu strict %d len %zu\n", chunks[c], strict, len);
+            abort();
+        }
+        free(got.b);
     }
-    free(got.b);
     free(want.b);
 }
 
