@@ -211,9 +211,10 @@ int main(void)
 
     for (i = 0; i < 20000; i++) {
         size_t len = (size_t)(next_rand() % sizeof buf), j;
+        int strict = (int)(next_rand() % 2);
         for (j = 0; j < len; j++)
             buf[j] = alpha[next_rand() % sizeof alpha];
-        check(buf, len, ',', 0);
+        check(buf, len, ',', strict);
     }
     printf("ok, %d cases\n", i);
     return 0;
