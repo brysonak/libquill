@@ -40,6 +40,8 @@ def check(build, path, failures):
 
 
 def test(build):
+    print("differential suite", flush=True)
+    subprocess.run([os.path.join(build, "differential")], check=True)
     failures, runs = [], 0
     for name in sorted(os.listdir(CSV_DIR)):
         if not name.endswith(".csv"):
