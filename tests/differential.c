@@ -161,6 +161,7 @@ static void parse(const unsigned char *s, size_t len, char delim, int strict, si
     {
         char *buf = (char *)malloc(len + 1);
         size_t have = 0, pos = 0;
+        int empty_last = (int)(next_rand() % 2);
         for (;;) {
             size_t take = 1 + (size_t)(next_rand() % chunk);
             int final;
@@ -169,7 +170,7 @@ static void parse(const unsigned char *s, size_t len, char delim, int strict, si
             memcpy(buf + have, s + pos, take);
             have += take;
             pos += take;
-            final = pos == len;
+            final = pos == len && !(empty_last && take);
             quill_feed(&P, buf, have, final);
             while ((rc = quill_next(&P, &f)) == QUILL_FIELD)
                 collect(&f, r);
