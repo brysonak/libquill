@@ -139,7 +139,7 @@ QUILL_I_INLINE void quill_i_index(uint32_t **out, uint32_t off, uint64_t s)
 }
 
 QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off, uint64_t q, uint64_t pq, uint64_t d,
-                                 uint64_t n, uint64_t r)
+                                 uint64_t n, uint64_t r, uint64_t valid)
 {
     uint64_t s;
     pq ^= t->inq;
@@ -151,7 +151,7 @@ QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off,
         uint64_t b1 = q & pq & ~(s << 1 | t->sep | pclose);
         uint64_t b2 = pclose & ~(q | d | n | r);
         uint64_t b3 = (crout << 1 | t->cr) & ~n;
-        uint64_t bad = b1 | b2 | b3;
+        uint64_t bad = (b1 | b2 | b3) & valid;
         t->sep = s >> 63;
         t->close = close >> 63;
         t->cr = crout >> 63;
@@ -174,7 +174,7 @@ QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off,
     return t->err ? 1 : 0;
 }
 
-static size_t quill_i_run_scalar(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off)
+static size_t quill_i_run_scalar(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off, uint64_t valid)
 {
     quill_i_state t = p->st;
     uint32_t *o = p->idx + p->n;
@@ -188,7 +188,7 @@ static size_t quill_i_run_scalar(quill_parser *p, const unsigned char *s, size_t
             n |= (uint64_t)(s[i] == '\n') << i;
             r |= (uint64_t)(s[i] == '\r') << i;
         }
-        if (quill_i_block(&t, &o, off, q, quill_i_pxor(q), d, n, r)) {
+        if (quill_i_block(&t, &o, off, q, quill_i_pxor(q), d, n, r, valid)) {
             k++;
             break;
         }
@@ -234,13 +234,13 @@ static void quill_i_scan(quill_parser *p)
     p->n = 0;
     p->ip = p->ie = p->idx;
     p->st.gbase = p->off0 + (uint64_t)((const char *)s - p->buf);
-    k = quill_i_run_scalar(p, s, nb, 0);
+    k = quill_i_run_scalar(p, s, nb, 0, ~(uint64_t)0);
     s += 64 * k;
     if (k == nb && p->final && !p->st.err && s < end && (size_t)(end - s) < 64) {
         unsigned char pad[64] = {0};
         size_t rem = (size_t)(end - s);
         memcpy(pad, s, rem);
-        quill_i_run_scalar(p, pad, 1, (uint32_t)(s - (const unsigned char *)p->base));
+        quill_i_run_scalar(p, pad, 1, (uint32_t)(s - (const unsigned char *)p->base), ((uint64_t)1 << rem) - 1);
         s = end;
     }
     p->scan = (const char *)s;
