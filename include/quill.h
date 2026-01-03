@@ -218,7 +218,7 @@ void quill_feed(quill_parser *p, const char *buf, size_t len, int final)
     p->final = (unsigned char)(final != 0);
     p->n = 0;
     p->ip = p->ie = p->idx;
-    if (len >= 3 && memcmp(buf, "\xEF\xBB\xBF", 3) == 0) {
+    if (p->off0 == 0 && keep == 0 && len >= 3 && memcmp(buf, "\xEF\xBB\xBF", 3) == 0) {
         p->field = p->scan = buf + 3;
         p->line0 = 3;
     }
