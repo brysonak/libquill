@@ -36,7 +36,7 @@ typedef struct {
 typedef struct quill_parser {
     const char *buf, *end, *scan, *field, *base;
     const uint32_t *ip, *ie;
-    uint64_t off0;
+    uint64_t off0, line0;
     uint32_t n;
     unsigned char delim, final, done;
     quill_i_state st;
@@ -218,8 +218,10 @@ void quill_feed(quill_parser *p, const char *buf, size_t len, int final)
     p->final = (unsigned char)(final != 0);
     p->n = 0;
     p->ip = p->ie = p->idx;
-    if (len >= 3 && memcmp(buf, "\xEF\xBB\xBF", 3) == 0)
+    if (len >= 3 && memcmp(buf, "\xEF\xBB\xBF", 3) == 0) {
         p->field = p->scan = buf + 3;
+        p->line0 = 3;
+    }
 }
 
 static void quill_i_scan(quill_parser *p)
@@ -246,7 +248,7 @@ static void quill_i_scan(quill_parser *p)
 
 static int quill_i_fail(quill_parser *p, uint64_t at, const char *msg)
 {
-    uint64_t m = p->st.nl_mask, start = 0;
+    uint64_t m = p->st.nl_mask, start = p->line0;
     if (m) {
         unsigned b = 63;
         while (!(m >> b & 1))
