@@ -36,9 +36,10 @@ typedef struct {
 typedef struct quill_parser {
     const char *buf, *end, *scan, *field, *base;
     const uint32_t *ip, *ie;
+    const char *origin;
     uint64_t off0, line0;
     uint32_t n;
-    unsigned char delim, final, done;
+    unsigned char delim, final, done, row_start;
     quill_i_state st;
     uint64_t err_line, err_col, err_offset;
     const char *err_msg;
@@ -199,6 +200,7 @@ int quill_init(quill_parser *p, char delim, int flags)
 {
     memset(p, 0, offsetof(quill_parser, idx));
     p->delim = (unsigned char)delim;
+    p->row_start = 1;
     p->st.sep = 1;
     p->st.strict = (flags & QUILL_STRICT) != 0;
     return 0;
@@ -219,6 +221,7 @@ void quill_feed(quill_parser *p, const char *buf, size_t len, int final)
         p->field = p->scan = buf + 3;
         p->line0 = 3;
     }
+    p->origin = p->field;
 }
 
 static void quill_i_scan(quill_parser *p)
@@ -260,6 +263,11 @@ static int quill_i_fail(quill_parser *p, uint64_t at, const char *msg)
     return QUILL_ERROR;
 }
 
+static int quill_i_row_start(const quill_parser *p)
+{
+    return p->field > p->origin ? (unsigned char)p->field[-1] != p->delim : p->row_start;
+}
+
 int quill_i_next_slow(quill_parser *p, quill_field *f)
 {
     if (p->err_msg)
@@ -278,8 +286,10 @@ int quill_i_next_slow(quill_parser *p, quill_field *f)
         if (p->st.err)
             return quill_i_fail(p, p->st.err_at, p->st.err);
     }
-    if (!p->final)
+    if (!p->final) {
+        p->row_start = (unsigned char)quill_i_row_start(p);
         return QUILL_MORE;
+    }
     if (p->done)
         return QUILL_END;
     p->done = 1;
@@ -290,7 +300,7 @@ int quill_i_next_slow(quill_parser *p, quill_field *f)
         if (p->end > p->buf && p->end[-1] == '\r')
             return quill_i_fail(p, at, "carriage return not followed by newline");
     }
-    if (p->field < p->end || (p->field > p->buf && p->field[-1] == p->delim)) {
+    if (p->field < p->end || !quill_i_row_start(p)) {
         quill_i_emit(p, f, p->end, 1, 1);
         p->field = p->end;
         return QUILL_FIELD;
