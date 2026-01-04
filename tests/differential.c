@@ -196,13 +196,16 @@ static void check(const unsigned char *s, size_t len, char delim, int strict)
         parse(s, len, delim, strict, chunks[c], &got);
         if (got.n != want.n || (want.n && memcmp(got.b, want.b, want.n)) || !got.msg != !want.msg
             || (want.msg && strcmp(got.msg, want.msg)) || got.line != want.line || got.col != want.col) {
-            fprintf(stderr, "mismatch: chunk %zu strict %d len %zu\n", chunks[c], strict, len);
+            fprintf(stderr, "mismatch: chunk %zu strict %d delim 0x%02x len %zu\n", chunks[c], strict,
+                    (unsigned char)delim, len);
             abort();
         }
         free(got.b);
     }
     free(want.b);
 }
+
+static const char delims[] = {',', ';', '\t', 'a', (char)0xBB};
 
 int main(void)
 {
@@ -212,10 +215,11 @@ int main(void)
 
     for (i = 0; i < 20000; i++) {
         size_t len = (size_t)(next_rand() % sizeof buf), j;
+        char delim = delims[next_rand() % 5];
         int strict = (int)(next_rand() % 2);
         for (j = 0; j < len; j++)
             buf[j] = alpha[next_rand() % sizeof alpha];
-        check(buf, len, ',', strict);
+        check(buf, len, delim, strict);
     }
     printf("ok, %d cases\n", i);
     return 0;
