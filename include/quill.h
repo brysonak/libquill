@@ -57,11 +57,8 @@ QUILL_INLINE void quill_i_emit(quill_parser *p, quill_field *f, const char *e, i
     if (eol && e > s && e[-1] == '\r')
         e--;
     f->quoted = *s == '"';
-    if (f->quoted) {
-        s++;
-        if (e[-1] == '"')
-            e--;
-    }
+    if (f->quoted && ++s < e && e[-1] == '"')
+        e--;
     f->ptr = s;
     f->len = (size_t)(e - s);
     f->eol = eol;
