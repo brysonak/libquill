@@ -213,6 +213,9 @@ int main(void)
     static const unsigned char alpha[] = {'a', 'b', ',', ';', '\t', '"', '"', '\n', '\r', 0, 0xEF, 0xBB, 0xBF};
     int i;
 
+    assert(quill_init(&P, '"', 0) < 0 && quill_init(&P, '\n', 0) < 0 && quill_init(&P, '\r', 0) < 0);
+    assert(quill_init(&P, 0, 0) < 0);
+
     for (i = 0; i < 20000; i++) {
         size_t len = (size_t)(next_rand() % sizeof buf), j;
         char delim = delims[next_rand() % 5];

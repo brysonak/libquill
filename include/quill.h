@@ -198,8 +198,11 @@ static size_t quill_i_run_scalar(quill_parser *p, const unsigned char *s, size_t
 
 int quill_init(quill_parser *p, char delim, int flags)
 {
+    unsigned char c = (unsigned char)delim;
+    if (c == '"' || c == '\n' || c == '\r' || c == 0)
+        return -1;
     memset(p, 0, offsetof(quill_parser, idx));
-    p->delim = (unsigned char)delim;
+    p->delim = c;
     p->row_start = 1;
     p->st.sep = 1;
     p->st.strict = (flags & QUILL_STRICT) != 0;
