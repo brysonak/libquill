@@ -50,13 +50,13 @@ void quill_feed(quill_parser *p, const char *buf, size_t len, int final);
 int quill_i_next_slow(quill_parser *p, quill_field *f);
 const char *quill_i_unescape(const quill_field *f, char *dst, size_t *len);
 
-QUILL_INLINE void quill_i_emit(quill_parser *p, quill_field *f, const char *e, int eol)
+QUILL_INLINE void quill_i_emit(quill_parser *p, quill_field *f, const char *e, int eol, int last)
 {
     const char *s = p->field;
     p->field = e + 1;
     if (eol && e > s && e[-1] == '\r')
         e--;
-    f->quoted = *s == '"';
+    f->quoted = (!last || s < e) && *s == '"';
     if (f->quoted && ++s < e && e[-1] == '"')
         e--;
     f->ptr = s;
@@ -68,7 +68,7 @@ QUILL_INLINE int quill_next(quill_parser *p, quill_field *f)
 {
     if (p->ip < p->ie) {
         const char *e = p->base + *p->ip++;
-        quill_i_emit(p, f, e, (unsigned char)*e != p->delim);
+        quill_i_emit(p, f, e, (unsigned char)*e != p->delim, 0);
         return QUILL_FIELD;
     }
     return quill_i_next_slow(p, f);
@@ -272,7 +272,7 @@ int quill_i_next_slow(quill_parser *p, quill_field *f)
             p->ip = p->idx + 1;
             p->ie = p->idx + p->n;
             const char *e = p->base + p->idx[0];
-            quill_i_emit(p, f, e, (unsigned char)*e != p->delim);
+            quill_i_emit(p, f, e, (unsigned char)*e != p->delim, 0);
             return QUILL_FIELD;
         }
         if (p->st.err)
@@ -291,7 +291,7 @@ int quill_i_next_slow(quill_parser *p, quill_field *f)
             return quill_i_fail(p, at, "carriage return not followed by newline");
     }
     if (p->field < p->end || (p->field > p->buf && p->field[-1] == p->delim)) {
-        quill_i_emit(p, f, p->end, 1);
+        quill_i_emit(p, f, p->end, 1, 1);
         p->field = p->end;
         return QUILL_FIELD;
     }
