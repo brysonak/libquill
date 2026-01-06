@@ -1,3 +1,4 @@
+#define QUILL_I_CAP 128
 #define QUILL_IMPLEMENTATION
 #include "quill.h"
 

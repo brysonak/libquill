@@ -11,7 +11,9 @@
 extern "C" {
 #endif
 
-#define QUILL_I_CAP    4096
+#ifndef QUILL_I_CAP
+#define QUILL_I_CAP 4096
+#endif
 #define QUILL_I_BLOCKS (QUILL_I_CAP / 64)
 
 #define QUILL_INLINE static inline
