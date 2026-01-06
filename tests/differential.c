@@ -210,7 +210,7 @@ static const char delims[] = {',', ';', '\t', 'a', (char)0xBB};
 
 int main(void)
 {
-    static unsigned char buf[400];
+    static unsigned char buf[40000];
     static const unsigned char alpha[] = {'a', 'b', ',', ';', '\t', '"', '"', '\n', '\r', 0, 0xEF, 0xBB, 0xBF};
     int i;
 
@@ -218,7 +218,7 @@ int main(void)
     assert(quill_init(&P, 0, 0) < 0);
 
     for (i = 0; i < 20000; i++) {
-        size_t len = (size_t)(next_rand() % sizeof buf), j;
+        size_t len = (size_t)(next_rand() % (i % 50 == 0 ? sizeof buf : 400)), j;
         char delim = delims[next_rand() % 5];
         int strict = (int)(next_rand() % 2);
         for (j = 0; j < len; j++)
