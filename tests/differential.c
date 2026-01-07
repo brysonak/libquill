@@ -212,6 +212,28 @@ static void check(const unsigned char *s, size_t len, char delim, int strict)
 
 static const char delims[] = {',', ';', '\t', 'a', (char)0xBB};
 
+static void known(const char *in, int strict, const char *want, uint64_t line, uint64_t col)
+{
+    char out[256] = {0};
+    quill_field f;
+    int rc;
+    assert(quill_init(&P, ',', strict ? QUILL_STRICT : 0) == 0);
+    quill_feed(&P, in, strlen(in), 1);
+    while ((rc = quill_next(&P, &f)) == QUILL_FIELD) {
+        char tmp[64];
+        size_t n;
+        const char *v = quill_value(&f, tmp, &n);
+        strncat(out, v, n);
+        strcat(out, f.eol ? "|\n" : "|");
+    }
+    if (strcmp(out, want) != 0) {
+        fprintf(stderr, "known case %s: got [%s] want [%s]\n", in, out, want);
+        abort();
+    }
+    assert(rc == (line ? QUILL_ERROR : QUILL_END));
+    assert(P.err_line == line && P.err_col == col);
+}
+
 int main(void)
 {
     static unsigned char buf[40000];
@@ -220,6 +242,14 @@ int main(void)
 
     assert(quill_init(&P, '"', 0) < 0 && quill_init(&P, '\n', 0) < 0 && quill_init(&P, '\r', 0) < 0);
     assert(quill_init(&P, 0, 0) < 0);
+    known("a,\"b,c\"\r\n\"x\"\"y\",", 0, "a|b,c|\nx\"y||\n", 0, 0);
+    known("\xEF\xBB\xBF"
+          "a\n\nb",
+          1, "a|\n|\nb|\n", 0, 0);
+    known("a,b\nc\"d", 1, "a|b|\n", 2, 2);
+    known("\"a\"x", 1, "", 1, 4);
+    known("\"a\n", 1, "", 2, 1);
+    known("a\rb", 1, "", 1, 3);
 
     for (i = 0; i < 20000; i++) {
         size_t len = (size_t)(next_rand() % (i % 50 == 0 ? sizeof buf : 400)), j;
