@@ -196,7 +196,8 @@ static void check(const unsigned char *s, size_t len, char delim, int strict)
         result got = {0};
         parse(s, len, delim, strict, chunks[c], &got);
         if (got.n != want.n || (want.n && memcmp(got.b, want.b, want.n)) || !got.msg != !want.msg
-            || (want.msg && strcmp(got.msg, want.msg)) || got.line != want.line || got.col != want.col) {
+            || (want.msg && strcmp(got.msg, want.msg)) || got.line != want.line || got.col != want.col
+            || got.off != want.off) {
             fprintf(stderr, "mismatch: chunk %zu strict %d delim 0x%02x len %zu\n", chunks[c], strict,
                     (unsigned char)delim, len);
             abort();
