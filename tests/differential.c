@@ -200,6 +200,9 @@ static void check(const unsigned char *s, size_t len, char delim, int strict)
             || got.off != want.off) {
             fprintf(stderr, "mismatch: chunk %zu strict %d delim 0x%02x len %zu\n", chunks[c], strict,
                     (unsigned char)delim, len);
+            fprintf(stderr, "want %s %llu:%llu, got %s %llu:%llu\n", want.msg ? want.msg : "ok",
+                    (unsigned long long)want.line, (unsigned long long)want.col, got.msg ? got.msg : "ok",
+                    (unsigned long long)got.line, (unsigned long long)got.col);
             abort();
         }
         free(got.b);
