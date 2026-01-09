@@ -229,7 +229,7 @@ void quill_feed(quill_parser *p, const char *buf, size_t len, int final)
     p->origin = p->field;
 }
 
-static void quill_i_scan(quill_parser *p)
+static void quill_i_stage1(quill_parser *p)
 {
     const unsigned char *s = (const unsigned char *)p->scan, *end = (const unsigned char *)p->end;
     size_t nb = (size_t)(end - s) / 64, k;
@@ -280,7 +280,7 @@ int quill_i_next_slow(quill_parser *p, quill_field *f)
     if (p->st.err)
         return quill_i_fail(p, p->st.err_at, p->st.err);
     while (p->final ? p->scan < p->end : p->end - p->scan >= 64) {
-        quill_i_scan(p);
+        quill_i_stage1(p);
         if (p->n) {
             p->ip = p->idx + 1;
             p->ie = p->idx + p->n;
