@@ -69,7 +69,10 @@ static char *load(FILE *f, size_t *len)
 
 static int usage(void)
 {
-    fputs("usage: dump [-s] [-k KERNEL] [-m whole|stream:N] FILE\n", stderr);
+    fputs("usage: dump [-s] [-k KERNEL] [-m "
+          "whole|stream:N] FILE\n"
+          "       dump -l\n",
+          stderr);
     return 2;
 }
 
@@ -83,7 +86,11 @@ int main(int argc, char **argv)
     FILE *in;
 
     for (i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "-s")) {
+        if (!strcmp(argv[i], "-l")) {
+            for (k = 0; k <= quill_i_best(); k++)
+                puts(quill_i_kernels[k].name);
+            return 0;
+        } else if (!strcmp(argv[i], "-s")) {
             strict = QUILL_STRICT;
         } else if (!strcmp(argv[i], "-m") && i + 1 < argc) {
             mode = argv[++i];
