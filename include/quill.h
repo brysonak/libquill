@@ -39,6 +39,7 @@ typedef struct quill_parser {
     const char *buf, *end, *scan, *field, *base;
     const uint32_t *ip, *ie;
     const char *origin;
+    size_t (*run)(struct quill_parser *, const unsigned char *, size_t, uint32_t, uint64_t);
     uint64_t off0, line0;
     uint32_t n;
     unsigned char delim, final, done, row_start;
@@ -204,6 +205,7 @@ int quill_init(quill_parser *p, char delim, int flags)
     if (c == '"' || c == '\n' || c == '\r' || c == 0)
         return -1;
     memset(p, 0, offsetof(quill_parser, idx));
+    p->run = quill_i_run_scalar;
     p->delim = c;
     p->row_start = 1;
     p->st.sep = 1;
@@ -239,13 +241,13 @@ static void quill_i_stage1(quill_parser *p)
     p->n = 0;
     p->ip = p->ie = p->idx;
     p->st.gbase = p->off0 + (uint64_t)((const char *)s - p->buf);
-    k = quill_i_run_scalar(p, s, nb, 0, ~(uint64_t)0);
+    k = p->run(p, s, nb, 0, ~(uint64_t)0);
     s += 64 * k;
     if (k == nb && p->final && !p->st.err && s < end && (size_t)(end - s) < 64) {
         unsigned char pad[64] = {0};
         size_t rem = (size_t)(end - s);
         memcpy(pad, s, rem);
-        quill_i_run_scalar(p, pad, 1, (uint32_t)(s - (const unsigned char *)p->base), ((uint64_t)1 << rem) - 1);
+        p->run(p, pad, 1, (uint32_t)(s - (const unsigned char *)p->base), ((uint64_t)1 << rem) - 1);
         s = end;
     }
     p->scan = (const char *)s;
