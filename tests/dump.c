@@ -69,7 +69,7 @@ static char *load(FILE *f, size_t *len)
 
 static int usage(void)
 {
-    fputs("usage: dump [-s] [-m whole|stream:N] FILE\n", stderr);
+    fputs("usage: dump [-s] [-k KERNEL] [-m whole|stream:N] FILE\n", stderr);
     return 2;
 }
 
@@ -78,7 +78,7 @@ int main(int argc, char **argv)
     static quill_parser p;
     quill_field f;
     const char *mode = "whole", *path = NULL;
-    int strict = 0, rc, i;
+    int strict = 0, k = quill_i_best(), rc, i;
     size_t n = 0;
     FILE *in;
 
@@ -87,6 +87,14 @@ int main(int argc, char **argv)
             strict = QUILL_STRICT;
         } else if (!strcmp(argv[i], "-m") && i + 1 < argc) {
             mode = argv[++i];
+        } else if (!strcmp(argv[i], "-k") && i + 1 < argc) {
+            for (k = quill_i_best(); k >= 0 && strcmp(quill_i_kernels[k].name, argv[i + 1]); k--) {
+            }
+            if (k < 0) {
+                fprintf(stderr, "kernel %s not available\n", argv[i + 1]);
+                return 2;
+            }
+            i++;
         } else if (argv[i][0] != '-' && !path) {
             path = argv[i];
         } else {
@@ -107,6 +115,7 @@ int main(int argc, char **argv)
         if (!buf)
             return 2;
         quill_init(&p, ',', strict);
+        p.run = quill_i_kernels[k].run;
         for (;;) {
             size_t want, got;
             int final;
@@ -142,6 +151,7 @@ int main(int argc, char **argv)
         if (!buf)
             return 2;
         quill_init(&p, ',', strict);
+        p.run = quill_i_kernels[k].run;
         quill_feed(&p, buf, len, 1);
         while ((rc = quill_next(&p, &f)) == QUILL_FIELD)
             emit(&f);
