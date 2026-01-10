@@ -45,6 +45,7 @@ def test(build):
     print("differential suite", flush=True)
     subprocess.run([os.path.join(build, "differential")], check=True)
     kernels = subprocess.run([os.path.join(build, "dump"), "-l"], capture_output=True, check=True).stdout.decode().split()
+    print(f"kernels: {' '.join(kernels)}")
     failures, runs = [], 0
     for name in sorted(os.listdir(CSV_DIR)):
         if not name.endswith(".csv"):
