@@ -103,6 +103,13 @@ QUILL_INLINE const char *quill_value(const quill_field *f, char *dst, size_t *le
 #define QUILL_IMPLEMENTATION_DONE
 
 #if defined(__GNUC__) || defined(__clang__)
+#if defined(__x86_64__)
+#define QUILL_I_X64 1
+#include <immintrin.h>
+#endif
+#endif
+
+#if defined(__GNUC__) || defined(__clang__)
 #define QUILL_I_INLINE static inline __attribute__((always_inline))
 #else
 #define QUILL_I_INLINE static inline
@@ -199,13 +206,80 @@ static size_t quill_i_run_scalar(quill_parser *p, const unsigned char *s, size_t
     return k;
 }
 
+#ifdef QUILL_I_X64
+QUILL_I_INLINE uint64_t quill_i_mask_sse2(const __m128i *v, __m128i c)
+{
+    return (uint64_t)_mm_movemask_epi8(_mm_cmpeq_epi8(v[0], c))
+         | (uint64_t)_mm_movemask_epi8(_mm_cmpeq_epi8(v[1], c)) << 16
+         | (uint64_t)_mm_movemask_epi8(_mm_cmpeq_epi8(v[2], c)) << 32
+         | (uint64_t)_mm_movemask_epi8(_mm_cmpeq_epi8(v[3], c)) << 48;
+}
+
+static size_t quill_i_run_sse2(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off, uint64_t valid)
+{
+    quill_i_state t = p->st;
+    uint32_t *o = p->idx + p->n;
+    const __m128i Q = _mm_set1_epi8('"'), D = _mm_set1_epi8((char)p->delim);
+    const __m128i N = _mm_set1_epi8('\n'), R = _mm_set1_epi8('\r');
+    size_t k;
+    for (k = 0; k < nb; k++, s += 64, off += 64) {
+        __m128i v[4];
+        uint64_t q;
+        v[0] = _mm_loadu_si128((const __m128i *)s);
+        v[1] = _mm_loadu_si128((const __m128i *)(s + 16));
+        v[2] = _mm_loadu_si128((const __m128i *)(s + 32));
+        v[3] = _mm_loadu_si128((const __m128i *)(s + 48));
+        q = quill_i_mask_sse2(v, Q);
+        if (quill_i_block(&t, &o, off, q, quill_i_pxor(q), quill_i_mask_sse2(v, D), quill_i_mask_sse2(v, N),
+                          t.strict ? quill_i_mask_sse2(v, R) : 0, valid)) {
+            k++;
+            break;
+        }
+    }
+    p->st = t;
+    p->n = (uint32_t)(o - p->idx);
+    return k;
+}
+
+#endif
+
+typedef size_t (*quill_i_run_fn)(quill_parser *, const unsigned char *, size_t, uint32_t, uint64_t);
+
+static const struct {
+    const char *name;
+    quill_i_run_fn run;
+    int level;
+} quill_i_kernels[] = {
+    {"scalar", quill_i_run_scalar, 0},
+#ifdef QUILL_I_X64
+    {"sse2", quill_i_run_sse2, 1},
+#endif
+};
+
+static int quill_i_level(void)
+{
+#ifdef QUILL_I_X64
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+static int quill_i_best(void)
+{
+    int l = quill_i_level(), k = 0;
+    while (k + 1 < (int)(sizeof quill_i_kernels / sizeof quill_i_kernels[0]) && quill_i_kernels[k + 1].level <= l)
+        k++;
+    return k;
+}
+
 int quill_init(quill_parser *p, char delim, int flags)
 {
     unsigned char c = (unsigned char)delim;
     if (c == '"' || c == '\n' || c == '\r' || c == 0)
         return -1;
     memset(p, 0, offsetof(quill_parser, idx));
-    p->run = quill_i_run_scalar;
+    p->run = quill_i_kernels[quill_i_best()].run;
     p->delim = c;
     p->row_start = 1;
     p->st.sep = 1;
