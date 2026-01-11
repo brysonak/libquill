@@ -146,11 +146,13 @@ static void finish(quill_parser *p, int rc, result *r)
     }
 }
 
-static void parse(const unsigned char *s, size_t len, char delim, int strict, size_t chunk, result *r)
+static void parse(quill_i_run_fn run, const unsigned char *s, size_t len, char delim, int strict, size_t chunk,
+                  result *r)
 {
     quill_field f;
     int rc;
     assert(quill_init(&P, delim, strict ? QUILL_STRICT : 0) == 0);
+    P.run = run;
     if (!chunk) {
         quill_feed(&P, (const char *)s, len, 1);
         while ((rc = quill_next(&P, &f)) == QUILL_FIELD)
@@ -189,23 +191,26 @@ static void parse(const unsigned char *s, size_t len, char delim, int strict, si
 static void check(const unsigned char *s, size_t len, char delim, int strict)
 {
     result want = {0};
-    size_t c;
+    size_t k, levels = sizeof quill_i_kernels / sizeof quill_i_kernels[0];
     static const size_t chunks[] = {0, 1, 7, 64, 200, 5000};
     oracle(s, len, (unsigned char)delim, strict, &want);
-    for (c = 0; c < sizeof chunks / sizeof chunks[0]; c++) {
-        result got = {0};
-        parse(s, len, delim, strict, chunks[c], &got);
-        if (got.n != want.n || (want.n && memcmp(got.b, want.b, want.n)) || !got.msg != !want.msg
-            || (want.msg && strcmp(got.msg, want.msg)) || got.line != want.line || got.col != want.col
-            || got.off != want.off) {
-            fprintf(stderr, "mismatch: chunk %zu strict %d delim 0x%02x len %zu\n", chunks[c], strict,
-                    (unsigned char)delim, len);
-            fprintf(stderr, "want %s %llu:%llu, got %s %llu:%llu\n", want.msg ? want.msg : "ok",
-                    (unsigned long long)want.line, (unsigned long long)want.col, got.msg ? got.msg : "ok",
-                    (unsigned long long)got.line, (unsigned long long)got.col);
-            abort();
+    for (k = 0; k < levels && quill_i_kernels[k].level <= quill_i_level(); k++) {
+        size_t c;
+        for (c = 0; c < sizeof chunks / sizeof chunks[0]; c++) {
+            result got = {0};
+            parse(quill_i_kernels[k].run, s, len, delim, strict, chunks[c], &got);
+            if (got.n != want.n || (want.n && memcmp(got.b, want.b, want.n)) || !got.msg != !want.msg
+                || (want.msg && strcmp(got.msg, want.msg)) || got.line != want.line || got.col != want.col
+                || got.off != want.off) {
+                fprintf(stderr, "mismatch: kernel %s chunk %zu strict %d delim 0x%02x len %zu\n",
+                        quill_i_kernels[k].name, chunks[c], strict, (unsigned char)delim, len);
+                fprintf(stderr, "want %s %llu:%llu, got %s %llu:%llu\n", want.msg ? want.msg : "ok",
+                        (unsigned long long)want.line, (unsigned long long)want.col, got.msg ? got.msg : "ok",
+                        (unsigned long long)got.line, (unsigned long long)got.col);
+                abort();
+            }
+            free(got.b);
         }
-        free(got.b);
     }
     free(want.b);
 }
