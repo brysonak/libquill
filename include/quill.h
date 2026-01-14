@@ -139,11 +139,25 @@ QUILL_I_INLINE uint64_t quill_i_pxor(uint64_t m)
 QUILL_I_INLINE void quill_i_flatten(uint32_t **out, uint32_t off, uint64_t s)
 {
     uint32_t *o = *out;
-    while (s) {
-        *o++ = off + quill_i_ctz(s);
+    unsigned cnt, i;
+    if (!s)
+        return;
+    cnt = quill_i_popcount(s);
+    for (i = 0; i < 4; i++) {
+        o[i] = off + quill_i_ctz(s);
         s &= s - 1;
     }
-    *out = o;
+    if (cnt > 4) {
+        for (; i < 8; i++) {
+            o[i] = off + quill_i_ctz(s);
+            s &= s - 1;
+        }
+        for (; s; i++) {
+            o[i] = off + quill_i_ctz(s);
+            s &= s - 1;
+        }
+    }
+    *out = o + cnt;
 }
 
 QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off, uint64_t q, uint64_t pq, uint64_t d,
