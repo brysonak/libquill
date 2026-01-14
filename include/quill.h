@@ -136,7 +136,7 @@ QUILL_I_INLINE uint64_t quill_i_pxor(uint64_t m)
     return m;
 }
 
-QUILL_I_INLINE void quill_i_index(uint32_t **out, uint32_t off, uint64_t s)
+QUILL_I_INLINE void quill_i_flatten(uint32_t **out, uint32_t off, uint64_t s)
 {
     uint32_t *o = *out;
     while (s) {
@@ -178,7 +178,7 @@ QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off,
             t->nl_at = t->gbase + off;
         }
     }
-    quill_i_index(out, off, s);
+    quill_i_flatten(out, off, s);
     return t->err ? 1 : 0;
 }
 
