@@ -120,6 +120,7 @@ QUILL_I_INLINE unsigned quill_i_popcount(uint64_t x)
     return (unsigned)__builtin_popcountll(x);
 }
 
+/* x must be nonzero */
 QUILL_I_INLINE unsigned quill_i_ctz(uint64_t x)
 {
     return (unsigned)__builtin_ctzll(x);
@@ -144,12 +145,12 @@ QUILL_I_INLINE void quill_i_flatten(uint32_t **out, uint32_t off, uint64_t s)
         return;
     cnt = quill_i_popcount(s);
     for (i = 0; i < 4; i++) {
-        o[i] = off + quill_i_ctz(s);
+        o[i] = off + quill_i_ctz(s | (1ULL << 63));
         s &= s - 1;
     }
     if (cnt > 4) {
         for (; i < 8; i++) {
-            o[i] = off + quill_i_ctz(s);
+            o[i] = off + quill_i_ctz(s | (1ULL << 63));
             s &= s - 1;
         }
         for (; s; i++) {
