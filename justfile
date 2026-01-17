@@ -12,3 +12,6 @@ bench:
     mkdir -p build
     {{cc}} -std=c11 {{warn}} -O2 tests/bench.c -o build/bench
     python3 tests/run.py bench build
+
+gen *args:
+    python3 tests/gen_csv.py {{args}}

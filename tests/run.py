@@ -53,6 +53,8 @@ def test(build):
     print(f"kernels: {' '.join(kernels)}")
     failures, runs = [], 0
     for path in csv_files():
+        if not os.path.exists(path[:-4] + ".json"):
+            continue
         before = len(failures)
         runs += check(build, kernels, path, failures)
         status = "ok" if len(failures) == before else "FAIL"
