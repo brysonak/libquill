@@ -77,8 +77,7 @@ int main(int argc, char **argv)
                 fields++;
             }
             iters++;
-        } while (iters < 10);
-        t = now() - t0;
+        } while ((t = now() - t0) < 0.3);
         printf("kernel %s %.4f GB/s %zu fields\n", quill_i_kernels[k].name, (double)len * (double)iters / t / 1e9,
                fields);
     }
