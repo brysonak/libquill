@@ -79,9 +79,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("size")
     ap.add_argument("--profile", choices=("dense", "mixed"), default="mixed")
+    ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--out")
     a = ap.parse_args()
-    path = os.path.join(HERE, "csv", f"gen_{a.profile}_{a.size}.csv")
-    generate(path, parse_size(a.size), a.profile, 1, ",")
+    path = a.out or os.path.join(HERE, "csv", f"gen_{a.profile}_{a.size}.csv")
+    generate(path, parse_size(a.size), a.profile, a.seed, ",")
     print(f"{path}  {os.path.getsize(path) / 1e6:.1f} MB", file=sys.stderr)
 
 
