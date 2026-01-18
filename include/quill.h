@@ -14,7 +14,7 @@ extern "C" {
 #ifndef QUILL_I_CAP
 #define QUILL_I_CAP 4096
 #endif
-#define QUILL_I_BLOCKS (QUILL_I_CAP / 64)
+#define QUILL_I_BLOCKS (QUILL_I_CAP / 4)
 
 #define QUILL_INLINE static inline
 
@@ -137,6 +137,8 @@ QUILL_I_INLINE uint64_t quill_i_pxor(uint64_t m)
     return m;
 }
 
+/* Up to 16 unconditional stores keep the common case branch free, so the index
+   needs 64 spare slots past the last block that starts */
 QUILL_I_INLINE void quill_i_flatten(uint32_t **out, uint32_t off, uint64_t s)
 {
     uint32_t *o = *out;
@@ -200,9 +202,9 @@ QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off,
 static size_t quill_i_run_scalar(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off, uint64_t valid)
 {
     quill_i_state t = p->st;
-    uint32_t *o = p->idx + p->n;
+    uint32_t *o = p->idx + p->n, *lim = p->idx + QUILL_I_CAP - 64;
     size_t k;
-    for (k = 0; k < nb; k++, s += 64, off += 64) {
+    for (k = 0; k < nb && o <= lim; k++, s += 64, off += 64) {
         uint64_t q = 0, d = 0, n = 0, r = 0;
         unsigned i;
         for (i = 0; i < 64; i++) {
@@ -233,11 +235,11 @@ QUILL_I_INLINE uint64_t quill_i_mask_sse2(const __m128i *v, __m128i c)
 static size_t quill_i_run_sse2(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off, uint64_t valid)
 {
     quill_i_state t = p->st;
-    uint32_t *o = p->idx + p->n;
+    uint32_t *o = p->idx + p->n, *lim = p->idx + QUILL_I_CAP - 64;
     const __m128i Q = _mm_set1_epi8('"'), D = _mm_set1_epi8((char)p->delim);
     const __m128i N = _mm_set1_epi8('\n'), R = _mm_set1_epi8('\r');
     size_t k;
-    for (k = 0; k < nb; k++, s += 64, off += 64) {
+    for (k = 0; k < nb && o <= lim; k++, s += 64, off += 64) {
         __m128i v[4];
         uint64_t q;
         v[0] = _mm_loadu_si128((const __m128i *)s);
@@ -336,8 +338,8 @@ static void quill_i_stage1(quill_parser *p)
         unsigned char pad[64] = {0};
         size_t rem = (size_t)(end - s);
         memcpy(pad, s, rem);
-        p->run(p, pad, 1, (uint32_t)(s - (const unsigned char *)p->base), ((uint64_t)1 << rem) - 1);
-        s = end;
+        if (p->run(p, pad, 1, (uint32_t)(s - (const unsigned char *)p->base), ((uint64_t)1 << rem) - 1))
+            s = end;
     }
     p->scan = (const char *)s;
 }
