@@ -242,7 +242,6 @@ static size_t quill_i_run_sse2(quill_parser *p, const unsigned char *s, size_t n
     for (k = 0; k < nb && o <= lim; k++, s += 64, off += 64) {
         __m128i v[4];
         uint64_t q;
-        _mm_prefetch((const char *)(s + 1024), _MM_HINT_T0);
         v[0] = _mm_loadu_si128((const __m128i *)s);
         v[1] = _mm_loadu_si128((const __m128i *)(s + 16));
         v[2] = _mm_loadu_si128((const __m128i *)(s + 32));
