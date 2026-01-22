@@ -258,6 +258,17 @@ static size_t quill_i_run_sse2(quill_parser *p, const unsigned char *s, size_t n
     return k;
 }
 
+static void quill_i_cpuid(unsigned leaf, unsigned r[4])
+{
+    __asm__ volatile("cpuid" : "=a"(r[0]), "=b"(r[1]), "=c"(r[2]), "=d"(r[3]) : "a"(leaf), "c"(0));
+}
+
+static int quill_i_detect(void)
+{
+    unsigned r[4];
+    quill_i_cpuid(7, r);
+    return (r[1] >> 5 & 1) ? 2 : 1;
+}
 #endif
 
 typedef size_t (*quill_i_run_fn)(quill_parser *, const unsigned char *, size_t, uint32_t, uint64_t);
@@ -276,7 +287,7 @@ static const struct {
 static int quill_i_level(void)
 {
 #ifdef QUILL_I_X64
-    return 1;
+    return quill_i_detect();
 #else
     return 0;
 #endif
