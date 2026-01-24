@@ -228,10 +228,10 @@ static size_t quill_i_run_scalar(quill_parser *p, const unsigned char *s, size_t
 #ifdef QUILL_I_X64
 QUILL_I_INLINE uint64_t quill_i_mask_sse2(const __m128i *v, __m128i c)
 {
-    return (uint64_t)_mm_movemask_epi8(_mm_cmpeq_epi8(v[0], c))
-         | (uint64_t)_mm_movemask_epi8(_mm_cmpeq_epi8(v[1], c)) << 16
-         | (uint64_t)_mm_movemask_epi8(_mm_cmpeq_epi8(v[2], c)) << 32
-         | (uint64_t)_mm_movemask_epi8(_mm_cmpeq_epi8(v[3], c)) << 48;
+    return (uint64_t)(uint32_t)_mm_movemask_epi8(_mm_cmpeq_epi8(v[0], c))
+         | (uint64_t)(uint32_t)_mm_movemask_epi8(_mm_cmpeq_epi8(v[1], c)) << 16
+         | (uint64_t)(uint32_t)_mm_movemask_epi8(_mm_cmpeq_epi8(v[2], c)) << 32
+         | (uint64_t)(uint32_t)_mm_movemask_epi8(_mm_cmpeq_epi8(v[3], c)) << 48;
 }
 
 static size_t quill_i_run_sse2(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off, uint64_t valid)
@@ -263,8 +263,8 @@ static size_t quill_i_run_sse2(quill_parser *p, const unsigned char *s, size_t n
 QUILL_I_TARGET("avx2")
 QUILL_I_INLINE uint64_t quill_i_mask_avx2(__m256i a, __m256i b, __m256i c)
 {
-    return (uint64_t)_mm256_movemask_epi8(_mm256_cmpeq_epi8(a, c))
-         | (uint64_t)_mm256_movemask_epi8(_mm256_cmpeq_epi8(b, c)) << 32;
+    return (uint64_t)(uint32_t)_mm256_movemask_epi8(_mm256_cmpeq_epi8(a, c))
+         | (uint64_t)(uint32_t)_mm256_movemask_epi8(_mm256_cmpeq_epi8(b, c)) << 32;
 }
 
 QUILL_I_TARGET("avx2")
