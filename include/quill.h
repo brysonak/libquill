@@ -274,7 +274,7 @@ QUILL_I_INLINE uint64_t quill_i_mask_avx2(__m256i a, __m256i b, __m256i c)
          | (uint64_t)(uint32_t)_mm256_movemask_epi8(_mm256_cmpeq_epi8(b, c)) << 32;
 }
 
-QUILL_I_TARGET("avx2,pclmul")
+QUILL_I_TARGET("avx2,popcnt,pclmul")
 static size_t quill_i_run_avx2(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off, uint64_t valid)
 {
     quill_i_state t = p->st;
@@ -307,7 +307,7 @@ static int quill_i_detect(void)
     unsigned r[4], ecx;
     quill_i_cpuid(1, r);
     ecx = r[2];
-    if (!(ecx >> 1 & 1))
+    if (!(ecx >> 1 & 1) || !(ecx >> 23 & 1))
         return 1;
     quill_i_cpuid(7, r);
     return (r[1] >> 5 & 1) ? 2 : 1;
