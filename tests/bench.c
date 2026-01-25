@@ -56,30 +56,33 @@ int main(int argc, char **argv)
     }
     printf("size %zu\n", len);
     for (k = 0; k <= (size_t)quill_i_best(); k++) {
-        size_t fields = 0, iters = 0;
-        double t0 = now(), t;
-        do {
-            quill_field f;
-            quill_init(&p, ',', 0);
-            p.run = quill_i_kernels[k].run;
-            quill_feed(&p, data, len, 1);
-            fields = 0;
-            while (quill_next(&p, &f) == QUILL_FIELD) {
-                size_t n;
-                if (f.len > cap) {
-                    char *t2 = (char *)realloc(tmp, f.len * 2);
-                    if (!t2)
-                        return 1;
-                    tmp = t2;
-                    cap = f.len * 2;
+        int strict;
+        for (strict = 0; strict < 2; strict++) {
+            size_t fields = 0, iters = 0;
+            double t0 = now(), t;
+            do {
+                quill_field f;
+                quill_init(&p, ',', strict ? QUILL_STRICT : 0);
+                p.run = quill_i_kernels[k].run;
+                quill_feed(&p, data, len, 1);
+                fields = 0;
+                while (quill_next(&p, &f) == QUILL_FIELD) {
+                    size_t n;
+                    if (f.len > cap) {
+                        char *t2 = (char *)realloc(tmp, f.len * 2);
+                        if (!t2)
+                            return 1;
+                        tmp = t2;
+                        cap = f.len * 2;
+                    }
+                    quill_value(&f, tmp, &n);
+                    fields++;
                 }
-                quill_value(&f, tmp, &n);
-                fields++;
-            }
-            iters++;
-        } while ((t = now() - t0) < 0.3);
-        printf("kernel %s %.4f GB/s %zu fields\n", quill_i_kernels[k].name, (double)len * (double)iters / t / 1e9,
-               fields);
+                iters++;
+            } while ((t = now() - t0) < 0.3);
+            printf("kernel %s %s %.4f GB/s %zu fields\n", quill_i_kernels[k].name, strict ? "strict" : "lenient",
+                   (double)len * (double)iters / t / 1e9, fields);
+        }
     }
     free(data);
     free(tmp);
