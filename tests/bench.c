@@ -59,6 +59,7 @@ int main(int argc, char **argv)
         int strict;
         for (strict = 0; strict < 2; strict++) {
             size_t fields = 0, iters = 0;
+            int rc = QUILL_END;
             double t0 = now(), t;
             do {
                 quill_field f;
@@ -66,7 +67,7 @@ int main(int argc, char **argv)
                 p.run = quill_i_kernels[k].run;
                 quill_feed(&p, data, len, 1);
                 fields = 0;
-                while (quill_next(&p, &f) == QUILL_FIELD) {
+                while ((rc = quill_next(&p, &f)) == QUILL_FIELD) {
                     size_t n;
                     if (f.len > cap) {
                         char *t2 = (char *)realloc(tmp, f.len * 2);
@@ -80,8 +81,9 @@ int main(int argc, char **argv)
                 }
                 iters++;
             } while ((t = now() - t0) < 0.3);
-            printf("kernel %s %s %.4f GB/s %zu fields\n", quill_i_kernels[k].name, strict ? "strict" : "lenient",
-                   (double)len * (double)iters / t / 1e9, fields);
+            printf("kernel %s %s %.4f GB/s %zu fields%s%s\n", quill_i_kernels[k].name, strict ? "strict" : "lenient",
+                   (double)len * (double)iters / t / 1e9, fields, rc == QUILL_ERROR ? " error: " : "",
+                   rc == QUILL_ERROR ? p.err_msg : "");
         }
     }
     free(data);
