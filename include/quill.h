@@ -302,12 +302,24 @@ static void quill_i_cpuid(unsigned leaf, unsigned r[4])
     __asm__ volatile("cpuid" : "=a"(r[0]), "=b"(r[1]), "=c"(r[2]), "=d"(r[3]) : "a"(leaf), "c"(0));
 }
 
+static uint64_t quill_i_xgetbv(void)
+{
+    unsigned lo, hi;
+    __asm__ volatile("xgetbv" : "=a"(lo), "=d"(hi) : "c"(0));
+    return (uint64_t)hi << 32 | lo;
+}
+
+/* xgetbv confirms the OS saves the YMM registers */
 static int quill_i_detect(void)
 {
     unsigned r[4], ecx;
+    uint64_t xcr;
     quill_i_cpuid(1, r);
     ecx = r[2];
-    if (!(ecx >> 1 & 1) || !(ecx >> 23 & 1))
+    if (!(ecx >> 27 & 1) || !(ecx >> 28 & 1) || !(ecx >> 1 & 1) || !(ecx >> 23 & 1))
+        return 1;
+    xcr = quill_i_xgetbv();
+    if ((xcr & 0x6) != 0x6)
         return 1;
     quill_i_cpuid(7, r);
     return (r[1] >> 5 & 1) ? 2 : 1;
