@@ -314,6 +314,9 @@ static int quill_i_detect(void)
 {
     unsigned r[4], ecx;
     uint64_t xcr;
+    quill_i_cpuid(0, r);
+    if (r[0] < 7)
+        return 1;
     quill_i_cpuid(1, r);
     ecx = r[2];
     if (!(ecx >> 27 & 1) || !(ecx >> 28 & 1) || !(ecx >> 1 & 1) || !(ecx >> 23 & 1))
