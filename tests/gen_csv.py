@@ -7,6 +7,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 WORDS = ("alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima "
           "mike november oscar papa quebec romeo sierra tango uniform victor whiskey "
           "xray yankee zulu").split()
+UNICODE = ["café", "naïve", "Zürich", "東京", "Москва", "🦆", "ñandú", "Ελλάδα"]
 
 
 def parse_size(text):
@@ -42,7 +43,7 @@ def pool(profile, delim, rng, n=8192):
             elif kind < 0.3:
                 s = str(rng.randrange(1 << 32))
             elif kind < 0.5:
-                s = rng.choice(WORDS)
+                s = rng.choice(UNICODE + WORDS)
             elif kind < 0.6:
                 s = f'he said "{rng.choice(WORDS)}"'
             elif kind < 0.7:
@@ -50,7 +51,7 @@ def pool(profile, delim, rng, n=8192):
             elif kind < 0.95:
                 s = " ".join(rng.choices(WORDS, k=rng.randrange(2, 12)))
             else:
-                s = " ".join(rng.choices(WORDS, k=rng.randrange(200, 2000)))
+                s = " ".join(rng.choices(WORDS + UNICODE, k=rng.randrange(200, 2000)))
         out.append(quote(s, delim))
     return out
 
