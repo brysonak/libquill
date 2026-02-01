@@ -12,7 +12,7 @@ extern "C" {
 #endif
 
 #ifndef QUILL_I_CAP
-#define QUILL_I_CAP 4096
+#define QUILL_I_CAP 16384
 #endif
 #define QUILL_I_BLOCKS (QUILL_I_CAP / 4)
 
