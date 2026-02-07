@@ -346,7 +346,10 @@ static const struct {
 static int quill_i_level(void)
 {
 #ifdef QUILL_I_X64
-    return quill_i_detect();
+    static int cached;
+    if (!cached)
+        cached = quill_i_detect();
+    return cached;
 #else
     return 0;
 #endif
