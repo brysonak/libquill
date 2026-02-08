@@ -234,6 +234,17 @@ QUILL_I_INLINE uint64_t quill_i_mask_sse2(const __m128i *v, __m128i c)
          | (uint64_t)(uint32_t)_mm_movemask_epi8(_mm_cmpeq_epi8(v[3], c)) << 48;
 }
 
+/* Blocks with no quote, delimiter or newline leave the state unchanged*/
+QUILL_I_INLINE int quill_i_any_sse2(const __m128i *v, __m128i q, __m128i d, __m128i n)
+{
+    __m128i a = _mm_setzero_si128();
+    int i;
+    for (i = 0; i < 4; i++)
+        a = _mm_or_si128(
+            a, _mm_or_si128(_mm_cmpeq_epi8(v[i], q), _mm_or_si128(_mm_cmpeq_epi8(v[i], d), _mm_cmpeq_epi8(v[i], n))));
+    return _mm_movemask_epi8(a);
+}
+
 static size_t quill_i_run_sse2(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off, uint64_t valid)
 {
     quill_i_state t = p->st;
@@ -248,6 +259,8 @@ static size_t quill_i_run_sse2(quill_parser *p, const unsigned char *s, size_t n
         v[1] = _mm_loadu_si128((const __m128i *)(s + 16));
         v[2] = _mm_loadu_si128((const __m128i *)(s + 32));
         v[3] = _mm_loadu_si128((const __m128i *)(s + 48));
+        if (!quill_i_any_sse2(v, Q, D, N))
+            continue;
         q = quill_i_mask_sse2(v, Q);
         if (quill_i_block(&t, &o, off, q, quill_i_pxor(q), quill_i_mask_sse2(v, D), quill_i_mask_sse2(v, N),
                           t.strict ? quill_i_mask_sse2(v, R) : 0, valid)) {
