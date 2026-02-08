@@ -287,6 +287,15 @@ QUILL_I_INLINE uint64_t quill_i_mask_avx2(__m256i a, __m256i b, __m256i c)
          | (uint64_t)(uint32_t)_mm256_movemask_epi8(_mm256_cmpeq_epi8(b, c)) << 32;
 }
 
+QUILL_I_TARGET("avx2")
+QUILL_I_INLINE int quill_i_none_avx2(__m256i a, __m256i b, __m256i q, __m256i d, __m256i n)
+{
+    __m256i x = _mm256_or_si256(_mm256_or_si256(_mm256_cmpeq_epi8(a, q), _mm256_cmpeq_epi8(b, q)),
+                                _mm256_or_si256(_mm256_cmpeq_epi8(a, d), _mm256_cmpeq_epi8(b, d)));
+    x = _mm256_or_si256(x, _mm256_or_si256(_mm256_cmpeq_epi8(a, n), _mm256_cmpeq_epi8(b, n)));
+    return _mm256_testz_si256(x, x);
+}
+
 QUILL_I_TARGET("avx2,popcnt,pclmul")
 static size_t quill_i_run_avx2(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off, uint64_t valid)
 {
@@ -298,7 +307,10 @@ static size_t quill_i_run_avx2(quill_parser *p, const unsigned char *s, size_t n
     for (k = 0; k < nb && o <= lim; k++, s += 64, off += 64) {
         __m256i a = _mm256_loadu_si256((const __m256i *)s);
         __m256i b = _mm256_loadu_si256((const __m256i *)(s + 32));
-        uint64_t q = quill_i_mask_avx2(a, b, Q);
+        uint64_t q;
+        if (quill_i_none_avx2(a, b, Q, D, N))
+            continue;
+        q = quill_i_mask_avx2(a, b, Q);
         if (quill_i_block(&t, &o, off, q, quill_i_clmul(q), quill_i_mask_avx2(a, b, D), quill_i_mask_avx2(a, b, N),
                           t.strict ? quill_i_mask_avx2(a, b, R) : 0, valid)) {
             k++;
