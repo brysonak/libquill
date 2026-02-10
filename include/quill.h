@@ -234,7 +234,7 @@ QUILL_I_INLINE uint64_t quill_i_mask_sse2(const __m128i *v, __m128i c)
          | (uint64_t)(uint32_t)_mm_movemask_epi8(_mm_cmpeq_epi8(v[3], c)) << 48;
 }
 
-/* Blocks with no quote, delimiter or newline leave the state unchanged*/
+/* Lenient blocks with no quote, delimiter or newline leave the state unchanged*/
 QUILL_I_INLINE int quill_i_any_sse2(const __m128i *v, __m128i q, __m128i d, __m128i n)
 {
     __m128i a = _mm_setzero_si128();
@@ -276,7 +276,7 @@ QUILL_I_INLINE size_t quill_i_sse2(quill_parser *p, const unsigned char *s, size
 
 static size_t quill_i_run_sse2(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off, uint64_t valid)
 {
-    return p->sparse ? quill_i_sse2(p, s, nb, off, valid, 1) : quill_i_sse2(p, s, nb, off, valid, 0);
+    return p->sparse && !p->st.strict ? quill_i_sse2(p, s, nb, off, valid, 1) : quill_i_sse2(p, s, nb, off, valid, 0);
 }
 
 QUILL_I_TARGET("pclmul")
@@ -332,7 +332,7 @@ QUILL_I_INLINE size_t quill_i_avx2(quill_parser *p, const unsigned char *s, size
 QUILL_I_TARGET("avx2,popcnt,pclmul")
 static size_t quill_i_run_avx2(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off, uint64_t valid)
 {
-    return p->sparse ? quill_i_avx2(p, s, nb, off, valid, 1) : quill_i_avx2(p, s, nb, off, valid, 0);
+    return p->sparse && !p->st.strict ? quill_i_avx2(p, s, nb, off, valid, 1) : quill_i_avx2(p, s, nb, off, valid, 0);
 }
 
 static void quill_i_cpuid(unsigned leaf, unsigned r[4])
