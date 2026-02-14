@@ -14,11 +14,19 @@ def tool(build, name):
     return os.path.join(build, name + EXE)
 
 
+def launch(args, capture=True):
+    p = subprocess.run(args, capture_output=capture)
+    if p.returncode:
+        err = p.stderr.decode(errors="replace").strip() if capture else ""
+        sys.exit(f"FAIL: {os.path.basename(args[0])} exit code {p.returncode}" + (f"\n{err}" if err else ""))
+    return p.stdout.decode(errors="replace") if capture else ""
+
+
 def dump(build, path, kernel=None, mode="whole", strict=False):
     args = [tool(build, "dump"), "-m", mode]
     args += ["-k", kernel] if kernel else []
     args += ["-s"] if strict else []
-    out = subprocess.run(args + [path], capture_output=True, check=True).stdout.decode()
+    out = launch(args + [path])
     rows, error = [], None
     for line in out.splitlines():
         if line.startswith("!error "):
@@ -53,8 +61,8 @@ def csv_files():
 
 def test(build):
     print("differential suite", flush=True)
-    subprocess.run([tool(build, "differential")], check=True)
-    kernels = subprocess.run([tool(build, "dump"), "-l"], capture_output=True, check=True).stdout.decode().split()
+    launch([tool(build, "differential")], capture=False)
+    kernels = launch([tool(build, "dump"), "-l"]).split()
     print(f"kernels: {' '.join(kernels)}")
     failures, runs = [], 0
     for path in csv_files():
@@ -73,8 +81,7 @@ def test(build):
 def bench(build):
     for path in csv_files():
         print(os.path.basename(path), flush=True)
-        out = subprocess.run([tool(build, "bench"), path], capture_output=True, check=True).stdout
-        for line in out.decode().splitlines():
+        for line in launch([tool(build, "bench"), path]).splitlines():
             print("  " + line)
     return 0
 
