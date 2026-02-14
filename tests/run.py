@@ -6,11 +6,16 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CSV_DIR = os.path.join(HERE, "csv")
+EXE = ".exe" if os.name == "nt" else ""
 MODES = ["whole", "stream:1", "stream:7", "stream:64", "stream:4096"]
 
 
+def tool(build, name):
+    return os.path.join(build, name + EXE)
+
+
 def dump(build, path, kernel=None, mode="whole", strict=False):
-    args = [os.path.join(build, "dump"), "-m", mode]
+    args = [tool(build, "dump"), "-m", mode]
     args += ["-k", kernel] if kernel else []
     args += ["-s"] if strict else []
     out = subprocess.run(args + [path], capture_output=True, check=True).stdout.decode()
@@ -48,8 +53,8 @@ def csv_files():
 
 def test(build):
     print("differential suite", flush=True)
-    subprocess.run([os.path.join(build, "differential")], check=True)
-    kernels = subprocess.run([os.path.join(build, "dump"), "-l"], capture_output=True, check=True).stdout.decode().split()
+    subprocess.run([tool(build, "differential")], check=True)
+    kernels = subprocess.run([tool(build, "dump"), "-l"], capture_output=True, check=True).stdout.decode().split()
     print(f"kernels: {' '.join(kernels)}")
     failures, runs = [], 0
     for path in csv_files():
@@ -68,7 +73,7 @@ def test(build):
 def bench(build):
     for path in csv_files():
         print(os.path.basename(path), flush=True)
-        out = subprocess.run([os.path.join(build, "bench"), path], capture_output=True, check=True).stdout
+        out = subprocess.run([tool(build, "bench"), path], capture_output=True, check=True).stdout
         for line in out.decode().splitlines():
             print("  " + line)
     return 0
