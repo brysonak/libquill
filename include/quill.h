@@ -129,13 +129,26 @@ QUILL_INLINE const char *quill_value(const quill_field *f, char *dst, size_t *le
 
 QUILL_I_INLINE unsigned quill_i_popcount(uint64_t x)
 {
+#if defined(__GNUC__) || defined(__clang__)
     return (unsigned)__builtin_popcountll(x);
+#else
+    x -= (x >> 1) & 0x5555555555555555ULL;
+    x = (x & 0x3333333333333333ULL) + ((x >> 2) & 0x3333333333333333ULL);
+    x = (x + (x >> 4)) & 0x0F0F0F0F0F0F0F0FULL;
+    return (unsigned)((x * 0x0101010101010101ULL) >> 56);
+#endif
 }
 
 /* x must be nonzero */
 QUILL_I_INLINE unsigned quill_i_ctz(uint64_t x)
 {
+#if defined(__GNUC__) || defined(__clang__)
     return (unsigned)__builtin_ctzll(x);
+#else
+    unsigned long i;
+    _BitScanForward64(&i, x);
+    return (unsigned)i;
+#endif
 }
 
 QUILL_I_INLINE uint64_t quill_i_pxor(uint64_t m)
