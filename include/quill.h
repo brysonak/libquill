@@ -16,7 +16,11 @@ extern "C" {
 #endif
 #define QUILL_I_BLOCKS (QUILL_I_CAP / 4)
 
+#if defined(_MSC_VER) && !defined(__cplusplus)
+#define QUILL_INLINE static __inline
+#else
 #define QUILL_INLINE static inline
+#endif
 
 enum { QUILL_ERROR = -1, QUILL_END = 0, QUILL_FIELD = 1, QUILL_MORE = 2 };
 enum { QUILL_STRICT = 1 };
@@ -102,16 +106,22 @@ QUILL_INLINE const char *quill_value(const quill_field *f, char *dst, size_t *le
 #ifndef QUILL_IMPLEMENTATION_DONE
 #define QUILL_IMPLEMENTATION_DONE
 
-#if defined(__GNUC__) || defined(__clang__)
-#if defined(__x86_64__)
+#if defined(__GNUC__) || defined(__clang__) || defined(_MSC_VER)
+#if defined(__x86_64__) || defined(_M_X64)
 #define QUILL_I_X64 1
 #include <immintrin.h>
 #endif
+#endif
+#if defined(_MSC_VER) && !defined(__clang__)
+#include <intrin.h>
 #endif
 
 #if defined(__GNUC__) || defined(__clang__)
 #define QUILL_I_INLINE    static inline __attribute__((always_inline))
 #define QUILL_I_TARGET(x) __attribute__((target(x)))
+#elif defined(_MSC_VER)
+#define QUILL_I_INLINE static __forceinline
+#define QUILL_I_TARGET(x)
 #else
 #define QUILL_I_INLINE static inline
 #define QUILL_I_TARGET(x)
@@ -337,14 +347,24 @@ static size_t quill_i_run_avx2(quill_parser *p, const unsigned char *s, size_t n
 
 static void quill_i_cpuid(unsigned leaf, unsigned r[4])
 {
+#if defined(_MSC_VER) && !defined(__clang__)
+    int t[4];
+    __cpuidex(t, (int)leaf, 0);
+    memcpy(r, t, sizeof t);
+#else
     __asm__ volatile("cpuid" : "=a"(r[0]), "=b"(r[1]), "=c"(r[2]), "=d"(r[3]) : "a"(leaf), "c"(0));
+#endif
 }
 
 static uint64_t quill_i_xgetbv(void)
 {
+#if defined(_MSC_VER) && !defined(__clang__)
+    return _xgetbv(0);
+#else
     unsigned lo, hi;
     __asm__ volatile("xgetbv" : "=a"(lo), "=d"(hi) : "c"(0));
     return (uint64_t)hi << 32 | lo;
+#endif
 }
 
 /* xgetbv confirms the OS saves the YMM registers */
