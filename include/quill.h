@@ -144,10 +144,16 @@ QUILL_I_INLINE unsigned quill_i_ctz(uint64_t x)
 {
 #if defined(__GNUC__) || defined(__clang__)
     return (unsigned)__builtin_ctzll(x);
-#else
+#elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_ARM64))
     unsigned long i;
     _BitScanForward64(&i, x);
     return (unsigned)i;
+#else
+    static const unsigned char debruijn[64] = {0,  1,  2,  53, 3,  7,  54, 27, 4,  38, 41, 8,  34, 55, 48, 28,
+                                               62, 5,  39, 46, 44, 42, 22, 9,  24, 35, 59, 56, 49, 18, 29, 11,
+                                               63, 52, 6,  26, 37, 40, 33, 47, 61, 45, 43, 21, 23, 58, 17, 10,
+                                               51, 25, 36, 32, 60, 20, 57, 16, 50, 31, 19, 15, 30, 14, 13, 12};
+    return debruijn[((x & (0 - x)) * 0x022FDD63CC95386DULL) >> 58];
 #endif
 }
 
