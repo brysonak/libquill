@@ -10,15 +10,30 @@ EXE = ".exe" if os.name == "nt" else ""
 MODES = ["whole", "stream:1", "stream:7", "stream:64", "stream:4096"]
 
 
+NTSTATUS = {
+    0xC0000135: "a DLL was not found, for the sanitizer runtime put `clang -print-runtime-dir` on PATH",
+    0xC0000005: "access violation",
+    0xC00000FD: "stack overflow",
+    0xC0000409: "fast fail, a stack buffer overrun or abort",
+}
+
+
 def tool(build, name):
     return os.path.join(build, name + EXE)
+
+
+def status(rc):
+    if os.name == "nt" and rc & 0xC0000000 == 0xC0000000:
+        code = rc & 0xFFFFFFFF
+        return f"status 0x{code:08X}" + (f", {NTSTATUS[code]}" if code in NTSTATUS else "")
+    return f"signal {-rc}" if rc < 0 else f"exit code {rc}"
 
 
 def launch(args, capture=True):
     p = subprocess.run(args, capture_output=capture)
     if p.returncode:
         err = p.stderr.decode(errors="replace").strip() if capture else ""
-        sys.exit(f"FAIL: {os.path.basename(args[0])} exit code {p.returncode}" + (f"\n{err}" if err else ""))
+        sys.exit(f"FAIL: {os.path.basename(args[0])} {status(p.returncode)}" + (f"\n{err}" if err else ""))
     return p.stdout.decode(errors="replace") if capture else ""
 
 
