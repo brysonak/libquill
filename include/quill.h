@@ -107,7 +107,7 @@ QUILL_INLINE const char *quill_value(const quill_field *f, char *dst, size_t *le
 #define QUILL_IMPLEMENTATION_DONE
 
 #if defined(__GNUC__) || defined(__clang__) || defined(_MSC_VER)
-#if defined(__x86_64__) || defined(_M_X64)
+#if (defined(__x86_64__) || defined(_M_X64)) && !defined(_M_ARM64EC)
 #define QUILL_I_X64 1
 #include <immintrin.h>
 #endif
