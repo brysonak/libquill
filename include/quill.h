@@ -74,7 +74,7 @@ QUILL_INLINE void quill_i_emit(quill_parser *p, quill_field *f, const char *e, i
 
 QUILL_INLINE int quill_next(quill_parser *p, quill_field *f)
 {
-    if (__builtin_expect(p->ip < p->ie, 1)) {
+    if (p->ip < p->ie) {
         const char *e = p->base + *p->ip++;
         quill_i_emit(p, f, e, (unsigned char)*e != p->delim, 0);
         return QUILL_FIELD;
