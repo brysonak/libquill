@@ -110,6 +110,9 @@ QUILL_INLINE const char *quill_value(const quill_field *f, char *dst, size_t *le
 #if (defined(__x86_64__) || defined(_M_X64)) && !defined(_M_ARM64EC)
 #define QUILL_I_X64 1
 #include <immintrin.h>
+#elif defined(__aarch64__) || defined(_M_ARM64)
+#define QUILL_I_NEON 1
+#include <arm_neon.h>
 #endif
 #endif
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -406,6 +409,44 @@ static int quill_i_detect(void)
 }
 #endif
 
+#ifdef QUILL_I_NEON
+/* NEON has no movemask, weight each lane by its bit and fold with pairwise adds */
+QUILL_I_INLINE uint64_t quill_i_mask_neon(const uint8x16_t *v, uint8x16_t c, uint8x16_t w)
+{
+    uint8x16_t a = vpaddq_u8(vandq_u8(vceqq_u8(v[0], c), w), vandq_u8(vceqq_u8(v[1], c), w));
+    uint8x16_t b = vpaddq_u8(vandq_u8(vceqq_u8(v[2], c), w), vandq_u8(vceqq_u8(v[3], c), w));
+    a = vpaddq_u8(a, b);
+    return vgetq_lane_u64(vreinterpretq_u64_u8(vpaddq_u8(a, a)), 0);
+}
+
+static size_t quill_i_run_neon(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off, uint64_t valid)
+{
+    static const unsigned char weights[16] = {1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128};
+    quill_i_state t = p->st;
+    uint32_t *o = p->idx + p->n, *lim = p->idx + QUILL_I_CAP - 64;
+    const uint8x16_t W = vld1q_u8(weights), Q = vdupq_n_u8('"'), D = vdupq_n_u8(p->delim);
+    const uint8x16_t N = vdupq_n_u8('\n'), R = vdupq_n_u8('\r');
+    size_t k;
+    for (k = 0; k < nb && o <= lim; k++, s += 64, off += 64) {
+        uint8x16_t v[4];
+        uint64_t q;
+        v[0] = vld1q_u8(s);
+        v[1] = vld1q_u8(s + 16);
+        v[2] = vld1q_u8(s + 32);
+        v[3] = vld1q_u8(s + 48);
+        q = quill_i_mask_neon(v, Q, W);
+        if (quill_i_block(&t, &o, off, q, quill_i_pxor(q), quill_i_mask_neon(v, D, W), quill_i_mask_neon(v, N, W),
+                          t.strict ? quill_i_mask_neon(v, R, W) : 0, valid)) {
+            k++;
+            break;
+        }
+    }
+    p->st = t;
+    p->n = (uint32_t)(o - p->idx);
+    return k;
+}
+#endif
+
 typedef size_t (*quill_i_run_fn)(quill_parser *, const unsigned char *, size_t, uint32_t, uint64_t);
 
 static const struct {
@@ -417,6 +458,8 @@ static const struct {
 #ifdef QUILL_I_X64
     {"sse2", quill_i_run_sse2, 1},
     {"avx2", quill_i_run_avx2, 2},
+#elif defined(QUILL_I_NEON)
+    {"neon", quill_i_run_neon, 1},
 #endif
 };
 
@@ -427,6 +470,8 @@ static int quill_i_level(void)
     if (!cached)
         cached = quill_i_detect();
     return cached;
+#elif defined(QUILL_I_NEON)
+    return 1;
 #else
     return 0;
 #endif
