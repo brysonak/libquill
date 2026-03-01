@@ -419,7 +419,8 @@ QUILL_I_INLINE uint64_t quill_i_mask_neon(const uint8x16_t *v, uint8x16_t c, uin
     return vgetq_lane_u64(vreinterpretq_u64_u8(vpaddq_u8(a, a)), 0);
 }
 
-static size_t quill_i_run_neon(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off, uint64_t valid)
+QUILL_I_INLINE size_t quill_i_neon(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off, uint64_t valid,
+                                   const int sparse)
 {
     static const unsigned char weights[16] = {1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128};
     quill_i_state t = p->st;
@@ -434,6 +435,14 @@ static size_t quill_i_run_neon(quill_parser *p, const unsigned char *s, size_t n
         v[1] = vld1q_u8(s + 16);
         v[2] = vld1q_u8(s + 32);
         v[3] = vld1q_u8(s + 48);
+        if (sparse) {
+            uint8x16_t any = vdupq_n_u8(0);
+            int i;
+            for (i = 0; i < 4; i++)
+                any = vorrq_u8(any, vorrq_u8(vceqq_u8(v[i], Q), vorrq_u8(vceqq_u8(v[i], D), vceqq_u8(v[i], N))));
+            if (!vmaxvq_u8(any))
+                continue;
+        }
         q = quill_i_mask_neon(v, Q, W);
         if (quill_i_block(&t, &o, off, q, quill_i_pxor(q), quill_i_mask_neon(v, D, W), quill_i_mask_neon(v, N, W),
                           t.strict ? quill_i_mask_neon(v, R, W) : 0, valid)) {
@@ -444,6 +453,11 @@ static size_t quill_i_run_neon(quill_parser *p, const unsigned char *s, size_t n
     p->st = t;
     p->n = (uint32_t)(o - p->idx);
     return k;
+}
+
+static size_t quill_i_run_neon(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off, uint64_t valid)
+{
+    return p->sparse && !p->st.strict ? quill_i_neon(p, s, nb, off, valid, 1) : quill_i_neon(p, s, nb, off, valid, 0);
 }
 #endif
 
