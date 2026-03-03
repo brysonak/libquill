@@ -110,7 +110,7 @@ QUILL_INLINE const char *quill_value(const quill_field *f, char *dst, size_t *le
 #if (defined(__x86_64__) || defined(_M_X64)) && !defined(_M_ARM64EC)
 #define QUILL_I_X64 1
 #include <immintrin.h>
-#elif defined(__aarch64__) || defined(_M_ARM64)
+#elif (defined(__aarch64__) || defined(_M_ARM64)) && !defined(__AARCH64EB__)
 #define QUILL_I_NEON 1
 #include <arm_neon.h>
 #endif
