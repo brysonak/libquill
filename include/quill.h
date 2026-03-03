@@ -444,7 +444,12 @@ QUILL_I_INLINE size_t quill_i_neon(quill_parser *p, const unsigned char *s, size
                 continue;
         }
         q = quill_i_mask_neon(v, Q, W);
-        if (quill_i_block(&t, &o, off, q, quill_i_pxor(q), quill_i_mask_neon(v, D, W), quill_i_mask_neon(v, N, W),
+#if defined(__ARM_FEATURE_AES) || defined(__ARM_FEATURE_CRYPTO)
+        uint64_t pq = vgetq_lane_u64(vreinterpretq_u64_p128(vmull_p64(q, ~0ULL)), 0);
+#else
+        uint64_t pq = quill_i_pxor(q);
+#endif
+        if (quill_i_block(&t, &o, off, q, pq, quill_i_mask_neon(v, D, W), quill_i_mask_neon(v, N, W),
                           t.strict ? quill_i_mask_neon(v, R, W) : 0, valid)) {
             k++;
             break;
