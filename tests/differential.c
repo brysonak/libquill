@@ -220,6 +220,8 @@ static const char delims[] = {',', ';', '\t', 'a', (char)0xBB};
 #ifdef QUILL_FUZZ
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 {
+    if (size < 1)
+        return 0;
     rng = 88172645463325252ULL ^ data[0];
     check(data + 1, size - 1, delims[data[0] % 5], data[0] >> 7);
     return 0;
