@@ -217,6 +217,15 @@ static void check(const unsigned char *s, size_t len, char delim, int strict)
 
 static const char delims[] = {',', ';', '\t', 'a', (char)0xBB};
 
+#ifdef QUILL_FUZZ
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
+{
+    rng = 88172645463325252ULL ^ data[0];
+    check(data + 1, size - 1, delims[data[0] % 5], data[0] >> 7);
+    return 0;
+}
+#else
+
 static void known(const char *in, int strict, const char *want, uint64_t line, uint64_t col)
 {
     char out[256] = {0};
@@ -267,3 +276,4 @@ int main(void)
     printf("ok, %d cases\n", i);
     return 0;
 }
+#endif

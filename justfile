@@ -24,3 +24,9 @@ bench:
 
 gen *args:
     {{py}} tests/gen_csv.py {{args}}
+
+fuzz secs="60":
+    {{mkdir}}
+    {{copy_asan}}
+    {{cc}} -std=c99 {{warn}} -O1 -g -DQUILL_FUZZ "-fsanitize=fuzzer,address,undefined" tests/differential.c -o build/fuzz{{exe}}
+    ./build/fuzz{{exe}} -max_total_time={{secs}} -artifact_prefix=build/
