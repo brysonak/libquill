@@ -232,6 +232,8 @@ static size_t gen_valid(unsigned char *s, size_t cap, char delim)
 {
     static const char text[] = "abc xyz 0123";
     size_t n = 0;
+    if (next_rand() % 8 == 0)
+        memcpy(s, "\xEF\xBB\xBF", 3), n = 3;
     while (n + 200 < cap) {
         unsigned fields = 1 + (unsigned)(next_rand() % 6), i;
         for (i = 0; i < fields; i++) {
