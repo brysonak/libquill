@@ -228,6 +228,44 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
 }
 #else
 
+static size_t gen_valid(unsigned char *s, size_t cap, char delim)
+{
+    static const char text[] = "abc xyz 0123";
+    size_t n = 0;
+    while (n + 200 < cap) {
+        unsigned fields = 1 + (unsigned)(next_rand() % 6), i;
+        for (i = 0; i < fields; i++) {
+            unsigned len = (unsigned)(next_rand() % 12), j;
+            int quoted = next_rand() % 3 == 0;
+            if (quoted)
+                s[n++] = '"';
+            for (j = 0; j < len; j++) {
+                unsigned c = (unsigned)(next_rand() % 16);
+                if (quoted && c == 0)
+                    s[n++] = '"', s[n++] = '"';
+                else if (quoted && c == 1)
+                    s[n++] = (unsigned char)delim;
+                else if (quoted && c == 2)
+                    s[n++] = '\n';
+                else if (quoted && c == 3)
+                    s[n++] = '\r';
+                else
+                    s[n++] = (unsigned char)text[c % (sizeof text - 1)];
+                if ((unsigned char)s[n - 1] == (unsigned char)delim && !quoted)
+                    s[n - 1] = 'z';
+            }
+            if (quoted)
+                s[n++] = '"';
+            if (i + 1 < fields)
+                s[n++] = (unsigned char)delim;
+        }
+        if (next_rand() % 2)
+            s[n++] = '\r';
+        s[n++] = '\n';
+    }
+    return n;
+}
+
 static void known(const char *in, int strict, const char *want, uint64_t line, uint64_t col)
 {
     char out[256] = {0};
@@ -271,8 +309,12 @@ int main(void)
         size_t len = (size_t)(next_rand() % (i % 50 == 0 ? sizeof buf : 400)), j;
         char delim = delims[next_rand() % 5];
         int strict = (int)(next_rand() % 2);
-        for (j = 0; j < len; j++)
-            buf[j] = alpha[next_rand() % sizeof alpha];
+        if (i % 2) {
+            len = gen_valid(buf, len, delim);
+        } else {
+            for (j = 0; j < len; j++)
+                buf[j] = alpha[next_rand() % sizeof alpha];
+        }
         check(buf, len, delim, strict);
     }
     printf("ok, %d cases\n", i);
