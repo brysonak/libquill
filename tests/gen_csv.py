@@ -73,13 +73,15 @@ def pool(profile, delim, rng, n=8192):
     return out
 
 
-def generate(path, size, profile, seed, delim):
+def generate(path, size, profile, seed, delim, crlf, bom):
     rng = random.Random(seed)
     cols = {"dense": 12, "sparse": 4, "mixed": 8, "hostile": 3}[profile]
     fields = pool(profile, delim, rng)
-    eol = "\n"
+    eol = "\r\n" if crlf else "\n"
     written = 0
     with open(path, "wb") as f:
+        if bom:
+            written += f.write(b"\xef\xbb\xbf")
         while written < size:
             rows = [delim.join(rng.choices(fields, k=cols)) + eol for _ in range(4096)]
             data = "".join(rows).encode()
@@ -98,10 +100,14 @@ def main():
     ap.add_argument("size")
     ap.add_argument("--profile", choices=("dense", "sparse", "mixed", "hostile"), default="mixed")
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--tsv", action="store_true")
+    ap.add_argument("--crlf", action="store_true")
+    ap.add_argument("--bom", action="store_true")
     ap.add_argument("--out")
     a = ap.parse_args()
-    path = a.out or os.path.join(HERE, "csv", f"gen_{a.profile}_{a.size}.csv")
-    generate(path, parse_size(a.size), a.profile, a.seed, ",")
+    delim = "\t" if a.tsv else ","
+    path = a.out or os.path.join(HERE, "csv", f"gen_{a.profile}_{a.size}.{'tsv' if a.tsv else 'csv'}")
+    generate(path, parse_size(a.size), a.profile, a.seed, delim, a.crlf, a.bom)
     print(f"{path}  {os.path.getsize(path) / 1e6:.1f} MB", file=sys.stderr)
 
 

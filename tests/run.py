@@ -37,8 +37,8 @@ def launch(args, capture=True):
     return p.stdout.decode(errors="replace") if capture else ""
 
 
-def dump(build, path, kernel=None, mode="whole", strict=False):
-    args = [tool(build, "dump"), "-m", mode]
+def dump(build, path, delim, kernel=None, mode="whole", strict=False):
+    args = [tool(build, "dump"), "-d", "tab" if delim == "\t" else delim, "-m", mode]
     args += ["-k", kernel] if kernel else []
     args += ["-s"] if strict else []
     out = launch(args + [path])
@@ -52,17 +52,22 @@ def dump(build, path, kernel=None, mode="whole", strict=False):
     return rows, error
 
 
+def delim_for(path):
+    return "\t" if path.endswith(".tsv") else ","
+
+
 def check(build, kernels, path, failures):
     with open(path[:-4] + ".json", encoding="utf-8") as f:
         exp = json.load(f)
+    delim = delim_for(path)
     want = [[cell.encode("utf-8").decode("latin-1") for cell in row] for row in exp["rows"]]
     want_err = exp["strict_error"]
     for kernel in kernels:
         for mode in MODES:
-            rows, err = dump(build, path, kernel, mode)
+            rows, err = dump(build, path, delim, kernel, mode)
             if rows != want or err:
                 failures.append(f"{os.path.basename(path)} lenient {kernel} {mode}: got {rows} {err}")
-            rows, err = dump(build, path, kernel, mode, strict=True)
+            rows, err = dump(build, path, delim, kernel, mode, strict=True)
             if want_err is None and (rows != want or err):
                 failures.append(f"{os.path.basename(path)} strict {kernel} {mode}: got {rows} {err}")
             elif want_err is not None and err != want_err:
@@ -71,7 +76,8 @@ def check(build, kernels, path, failures):
 
 
 def csv_files():
-    return sorted(glob.glob(os.path.join(CSV_DIR, "*.csv")))
+    files = glob.glob(os.path.join(CSV_DIR, "*.csv")) + glob.glob(os.path.join(CSV_DIR, "*.tsv"))
+    return sorted(files)
 
 
 def test(build):
