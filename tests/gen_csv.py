@@ -37,6 +37,13 @@ def pool(profile, delim, rng, n=8192):
                 s = rng.choice(WORDS)
             else:
                 s = f"{rng.choice(WORDS)}{delim} {rng.choice(WORDS)}"
+        elif profile == "sparse":
+            words = rng.choices(WORDS + UNICODE, k=rng.randrange(20, 200))
+            if rng.random() < 0.3:
+                words.insert(rng.randrange(len(words)), "\n")
+            if rng.random() < 0.2:
+                words.insert(rng.randrange(len(words)), '"quoted"')
+            s = " ".join(words)
         else:
             if kind < 0.1:
                 s = ""
@@ -58,7 +65,7 @@ def pool(profile, delim, rng, n=8192):
 
 def generate(path, size, profile, seed, delim):
     rng = random.Random(seed)
-    cols = {"dense": 12, "mixed": 8}[profile]
+    cols = {"dense": 12, "sparse": 4, "mixed": 8}[profile]
     fields = pool(profile, delim, rng)
     eol = "\n"
     written = 0
@@ -79,7 +86,7 @@ def generate(path, size, profile, seed, delim):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("size")
-    ap.add_argument("--profile", choices=("dense", "mixed"), default="mixed")
+    ap.add_argument("--profile", choices=("dense", "sparse", "mixed"), default="mixed")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--out")
     a = ap.parse_args()
