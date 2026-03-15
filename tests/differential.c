@@ -265,6 +265,10 @@ static size_t gen_valid(unsigned char *s, size_t cap, char delim)
             s[n++] = '\r';
         s[n++] = '\n';
     }
+    if (n && next_rand() % 3 == 0)
+        n--;
+    if (n && next_rand() % 20 == 0)
+        s[next_rand() % n] = '"';
     return n;
 }
 
