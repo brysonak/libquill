@@ -24,9 +24,19 @@ def quote(s, delim):
 
 def pool(profile, delim, rng, n=8192):
     out = []
+    if profile == "hostile":
+        n = 64
     for _ in range(n):
         kind = rng.random()
-        if profile == "dense":
+        if profile == "hostile":
+            if kind < 0.25:
+                lines = (f"{rng.randrange(1000)}{delim}{rng.choice(WORDS)}{delim}x" for _ in range(rng.randrange(5000, 20000)))
+                s = "\n".join(lines)
+                if rng.random() < 0.2:
+                    s += ' said "hi"'
+            else:
+                s = rng.choice(WORDS)
+        elif profile == "dense":
             if kind < 0.4:
                 s = str(rng.randrange(10 ** rng.randrange(1, 9)))
             elif kind < 0.6:
@@ -65,7 +75,7 @@ def pool(profile, delim, rng, n=8192):
 
 def generate(path, size, profile, seed, delim):
     rng = random.Random(seed)
-    cols = {"dense": 12, "sparse": 4, "mixed": 8}[profile]
+    cols = {"dense": 12, "sparse": 4, "mixed": 8, "hostile": 3}[profile]
     fields = pool(profile, delim, rng)
     eol = "\n"
     written = 0
@@ -86,7 +96,7 @@ def generate(path, size, profile, seed, delim):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("size")
-    ap.add_argument("--profile", choices=("dense", "sparse", "mixed"), default="mixed")
+    ap.add_argument("--profile", choices=("dense", "sparse", "mixed", "hostile"), default="mixed")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--out")
     a = ap.parse_args()
