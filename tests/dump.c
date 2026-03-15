@@ -69,7 +69,7 @@ static char *load(FILE *f, size_t *len)
 
 static int usage(void)
 {
-    fputs("usage: dump [-s] [-k KERNEL] [-m "
+    fputs("usage: dump [-s] [-d DELIM] [-k KERNEL] [-m "
           "whole|stream:N] FILE\n"
           "       dump -l\n",
           stderr);
@@ -81,6 +81,7 @@ int main(int argc, char **argv)
     static quill_parser p;
     quill_field f;
     const char *mode = "whole", *path = NULL;
+    char delim = ',';
     int strict = 0, k = quill_i_best(), rc, i;
     size_t n = 0;
     FILE *in;
@@ -92,6 +93,8 @@ int main(int argc, char **argv)
             return 0;
         } else if (!strcmp(argv[i], "-s")) {
             strict = QUILL_STRICT;
+        } else if (!strcmp(argv[i], "-d") && i + 1 < argc) {
+            delim = !strcmp(argv[++i], "tab") ? '\t' : argv[i][0];
         } else if (!strcmp(argv[i], "-m") && i + 1 < argc) {
             mode = argv[++i];
         } else if (!strcmp(argv[i], "-k") && i + 1 < argc) {
@@ -119,9 +122,8 @@ int main(int argc, char **argv)
     if (!strncmp(mode, "stream:", 7)) {
         size_t cap = n, have = 0;
         char *buf = (char *)malloc(cap);
-        if (!buf)
-            return 2;
-        quill_init(&p, ',', strict);
+        if (!buf || quill_init(&p, delim, strict))
+            return usage();
         p.run = quill_i_kernels[k].run;
         for (;;) {
             size_t want, got;
@@ -157,7 +159,8 @@ int main(int argc, char **argv)
         fclose(in);
         if (!buf)
             return 2;
-        quill_init(&p, ',', strict);
+        if (quill_init(&p, delim, strict))
+            return usage();
         p.run = quill_i_kernels[k].run;
         quill_feed(&p, buf, len, 1);
         while ((rc = quill_next(&p, &f)) == QUILL_FIELD)
