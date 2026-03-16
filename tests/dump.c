@@ -4,14 +4,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static int checksum;
+static uint64_t rows, fields, hash = 14695981039346656037ULL;
 static int row_open;
 static char *scratch;
 static size_t scratch_cap;
+
+static void hash_bytes(const char *s, size_t n)
+{
+    size_t i;
+    for (i = 0; i < n; i++)
+        hash = (hash ^ (unsigned char)s[i]) * 1099511628211ULL;
+}
 
 static void emit(const quill_field *f)
 {
     size_t n, i;
     const char *v;
+    char sep[1];
     if (f->len > scratch_cap) {
         scratch_cap = f->len * 2;
         scratch = (char *)realloc(scratch, scratch_cap);
@@ -21,6 +31,14 @@ static void emit(const quill_field *f)
         }
     }
     v = quill_value(f, scratch, &n);
+    fields++;
+    rows += (uint64_t)f->eol;
+    if (checksum) {
+        sep[0] = f->eol ? 0x1E : 0x1F;
+        hash_bytes(v, n);
+        hash_bytes(sep, 1);
+        return;
+    }
     fputs(row_open ? "," : "[", stdout);
     putchar('"');
     for (i = 0; i < n; i++) {
@@ -40,9 +58,12 @@ static void emit(const quill_field *f)
 
 static int finish(const quill_parser *p, int rc)
 {
-    if (row_open)
+    if (row_open && !checksum)
         fputs("]\n", stdout);
     free(scratch);
+    if (checksum)
+        printf("rows %llu fields %llu hash %016llx\n", (unsigned long long)rows, (unsigned long long)fields,
+               (unsigned long long)hash);
     if (rc == QUILL_ERROR)
         printf("!error %llu %llu %s\n", (unsigned long long)p->err_line, (unsigned long long)p->err_col, p->err_msg);
     return 0;
@@ -70,7 +91,7 @@ static char *load(FILE *f, size_t *len)
 static int usage(void)
 {
     fputs("usage: dump [-s] [-d DELIM] [-k KERNEL] [-m "
-          "whole|stream:N] FILE\n"
+          "whole|stream:N] [-c] FILE\n"
           "       dump -l\n",
           stderr);
     return 2;
@@ -93,6 +114,8 @@ int main(int argc, char **argv)
             return 0;
         } else if (!strcmp(argv[i], "-s")) {
             strict = QUILL_STRICT;
+        } else if (!strcmp(argv[i], "-c")) {
+            checksum = 1;
         } else if (!strcmp(argv[i], "-d") && i + 1 < argc) {
             delim = !strcmp(argv[++i], "tab") ? '\t' : argv[i][0];
         } else if (!strcmp(argv[i], "-m") && i + 1 < argc) {
