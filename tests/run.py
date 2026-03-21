@@ -1,3 +1,4 @@
+import csv
 import glob
 import json
 import os
@@ -52,11 +53,19 @@ def dump(build, path, delim, kernel=None, mode="whole", strict=False):
     return rows, error
 
 
+def python_rows(path, delim):
+    csv.field_size_limit(sys.maxsize)
+    with open(path, newline="", encoding="latin-1") as f:
+        if f.read(3) != "\xef\xbb\xbf":
+            f.seek(0)
+        return [row for row in csv.reader(f, delimiter=delim)]
+
+
 def delim_for(path):
     return "\t" if path.endswith(".tsv") else ","
 
 
-def check(build, kernels, path, failures):
+def check_expected(build, kernels, path, failures):
     with open(path[:-4] + ".json", encoding="utf-8") as f:
         exp = json.load(f)
     delim = delim_for(path)
@@ -75,6 +84,14 @@ def check(build, kernels, path, failures):
     return len(kernels) * len(MODES) * 2
 
 
+def check_generated(build, kernels, path, failures):
+    delim = delim_for(path)
+    rows, err = dump(build, path, delim)
+    if err or rows != python_rows(path, delim):
+        failures.append(f"{os.path.basename(path)}: differs from Python's csv module")
+    return 1
+
+
 def csv_files():
     files = glob.glob(os.path.join(CSV_DIR, "*.csv")) + glob.glob(os.path.join(CSV_DIR, "*.tsv"))
     return sorted(files)
@@ -87,10 +104,9 @@ def test(build):
     print(f"kernels: {' '.join(kernels)}")
     failures, runs = [], 0
     for path in csv_files():
-        if not os.path.exists(path[:-4] + ".json"):
-            continue
+        expected = os.path.exists(path[:-4] + ".json")
         before = len(failures)
-        runs += check(build, kernels, path, failures)
+        runs += (check_expected if expected else check_generated)(build, kernels, path, failures)
         status = "ok" if len(failures) == before else "FAIL"
         print(f"  {status:4} {os.path.basename(path)}")
     for f in failures:
