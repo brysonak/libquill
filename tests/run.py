@@ -111,7 +111,7 @@ def check_generated(build, kernels, path, failures):
 
 def csv_files():
     files = glob.glob(os.path.join(CSV_DIR, "*.csv")) + glob.glob(os.path.join(CSV_DIR, "*.tsv"))
-    return sorted(files)
+    return sorted(files, key=os.path.getsize)
 
 
 def test(build):
@@ -125,11 +125,18 @@ def test(build):
         before = len(failures)
         runs += (check_expected if expected else check_generated)(build, kernels, path, failures)
         status = "ok" if len(failures) == before else "FAIL"
-        print(f"  {status:4} {os.path.basename(path)}")
+        print(f"  {status:4} {os.path.basename(path):34} {human(os.path.getsize(path)):>9}", flush=True)
     for f in failures:
         print("FAIL:", f)
     print(f"{runs} parses, {len(failures)} failures")
     return 1 if failures else 0
+
+
+def human(n):
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
 
 
 def bench(build):
