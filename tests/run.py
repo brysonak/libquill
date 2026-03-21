@@ -8,7 +8,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 CSV_DIR = os.path.join(HERE, "csv")
 EXE = ".exe" if os.name == "nt" else ""
-MODES = ["whole", "stream:1", "stream:7", "stream:64", "stream:4096"]
+PY_LIMIT = 16 << 20
+SMALL_MODES = ["whole", "stream:1", "stream:7", "stream:64", "stream:4096"]
+BIG_MODES = ["whole", "stream:65536"]
 
 
 NTSTATUS = {
@@ -38,16 +40,19 @@ def launch(args, capture=True):
     return p.stdout.decode(errors="replace") if capture else ""
 
 
-def dump(build, path, delim, kernel=None, mode="whole", strict=False):
+def dump(build, path, delim, kernel=None, mode="whole", strict=False, checksum=False):
     args = [tool(build, "dump"), "-d", "tab" if delim == "\t" else delim, "-m", mode]
     args += ["-k", kernel] if kernel else []
     args += ["-s"] if strict else []
+    args += ["-c"] if checksum else []
     out = launch(args + [path])
     rows, error = [], None
     for line in out.splitlines():
         if line.startswith("!error "):
             ln, col, msg = line[7:].split(" ", 2)
             error = [int(ln), int(col), msg]
+        elif checksum:
+            rows.append(line)
         else:
             rows.append(json.loads(line))
     return rows, error
@@ -72,7 +77,7 @@ def check_expected(build, kernels, path, failures):
     want = [[cell.encode("utf-8").decode("latin-1") for cell in row] for row in exp["rows"]]
     want_err = exp["strict_error"]
     for kernel in kernels:
-        for mode in MODES:
+        for mode in SMALL_MODES:
             rows, err = dump(build, path, delim, kernel, mode)
             if rows != want or err:
                 failures.append(f"{os.path.basename(path)} lenient {kernel} {mode}: got {rows} {err}")
@@ -81,15 +86,27 @@ def check_expected(build, kernels, path, failures):
                 failures.append(f"{os.path.basename(path)} strict {kernel} {mode}: got {rows} {err}")
             elif want_err is not None and err != want_err:
                 failures.append(f"{os.path.basename(path)} strict {kernel} {mode}: error {err}, want {want_err}")
-    return len(kernels) * len(MODES) * 2
+    return len(kernels) * len(SMALL_MODES) * 2
 
 
 def check_generated(build, kernels, path, failures):
     delim = delim_for(path)
-    rows, err = dump(build, path, delim)
-    if err or rows != python_rows(path, delim):
-        failures.append(f"{os.path.basename(path)}: differs from Python's csv module")
-    return 1
+    name = os.path.basename(path)
+    runs = 0
+    if os.path.getsize(path) <= PY_LIMIT:
+        rows, err = dump(build, path, delim)
+        runs += 1
+        if err or rows != python_rows(path, delim):
+            failures.append(f"{name}: differs from Python's csv module")
+    base, _ = dump(build, path, delim, checksum=True)
+    for kernel in kernels:
+        for mode in BIG_MODES:
+            for strict in (False, True):
+                got, err = dump(build, path, delim, kernel, mode, strict, checksum=True)
+                runs += 1
+                if got != base or err:
+                    failures.append(f"{name} {kernel} {mode} {'strict' if strict else 'lenient'}: {got} {err}")
+    return runs
 
 
 def csv_files():
