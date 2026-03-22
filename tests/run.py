@@ -126,7 +126,7 @@ def test(build):
         runs += (check_expected if expected else check_generated)(build, kernels, path, failures)
         status = "ok" if len(failures) == before else "FAIL"
         print(f"  {status:4} {os.path.basename(path):34} {human(os.path.getsize(path)):>9}", flush=True)
-    for f in failures:
+    for f in failures[:50]:
         print("FAIL:", f)
     print(f"{runs} parses, {len(failures)} failures")
     return 1 if failures else 0
