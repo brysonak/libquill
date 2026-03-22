@@ -140,10 +140,22 @@ def human(n):
 
 
 def bench(build):
+    header = None
     for path in csv_files():
-        print(os.path.basename(path), flush=True)
-        for line in launch([tool(build, "bench"), path, "-d", "tab" if path.endswith(".tsv") else ","]).splitlines():
-            print("  " + line)
+        out = launch([tool(build, "bench"), path, "-d", "tab" if path.endswith(".tsv") else ","]).splitlines()
+        kernels = {}
+        for line in out:
+            f = line.split()
+            if f[0] == "kernel" and f[2] == "lenient":
+                kernels[f[1]] = float(f[3])
+        if header is None:
+            names = list(kernels)
+            header = f"{'file':34} {'size':>9} " + " ".join(f"{n:>8}" for n in names)
+            print("GB/s per kernel")
+            print(header)
+            print("-" * len(header))
+        print(f"{os.path.basename(path):34} {human(os.path.getsize(path)):>9} "
+              + " ".join(f"{kernels[n]:8.2f}" for n in names), flush=True)
     return 0
 
 
