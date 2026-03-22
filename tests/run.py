@@ -142,7 +142,7 @@ def human(n):
 def bench(build):
     for path in csv_files():
         print(os.path.basename(path), flush=True)
-        for line in launch([tool(build, "bench"), path]).splitlines():
+        for line in launch([tool(build, "bench"), path, "-d", "tab" if path.endswith(".tsv") else ","]).splitlines():
             print("  " + line)
     return 0
 
