@@ -59,7 +59,7 @@ def dump(build, path, delim, kernel=None, mode="whole", strict=False, checksum=F
 
 
 def python_rows(path, delim):
-    csv.field_size_limit(sys.maxsize)
+    csv.field_size_limit(min(sys.maxsize, 2**31 - 1))
     with open(path, newline="", encoding="latin-1") as f:
         if f.read(3) != "\xef\xbb\xbf":
             f.seek(0)
