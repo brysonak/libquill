@@ -143,23 +143,26 @@ def bench(build):
     header = None
     for path in csv_files():
         out = launch([tool(build, "bench"), path, "-d", "tab" if path.endswith(".tsv") else ","]).splitlines()
-        kernels, strict = {}, {}
+        kernels, strict, best_time = {}, {}, None
         for line in out:
             f = line.split()
             if f[0] == "kernel":
-                gbps = float(f[3])
+                gbps, us = float(f[3]), float(f[5])
                 (kernels if f[2] == "lenient" else strict)[f[1]] = gbps
+                if f[2] == "lenient":
+                    best_time = us
         if header is None:
             names = list(kernels)
             header = f"{'file':34} {'size':>9} " + " ".join(f"{n:>8}" for n in names)
-            header += f" {'strict':>8}"
-            print("GB/s, lenient per kernel, strict on the best kernel")
+            header += f" {'strict':>8} {'time':>10}"
+            print("GB/s, lenient per kernel, strict and time on the best kernel")
             print(header)
             print("-" * len(header))
         best = names[-1]
+        t = f"{best_time:.1f} us" if best_time < 1000 else f"{best_time / 1000:.1f} ms"
         print(f"{os.path.basename(path):34} {human(os.path.getsize(path)):>9} "
               + " ".join(f"{kernels[n]:8.2f}" for n in names)
-              + f" {strict[best]:8.2f}", flush=True)
+              + f" {strict[best]:8.2f} {t:>10}", flush=True)
     return 0
 
 
