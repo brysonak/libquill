@@ -140,8 +140,11 @@ def human(n):
 
 
 def bench(build):
+    files = csv_files()
+    if not any(os.path.basename(f).startswith("gen_") for f in files):
+        print("no generated files in tests/csv yet, `just gen` makes the default set\n")
     header = None
-    for path in csv_files():
+    for path in files:
         out = launch([tool(build, "bench"), path, "-d", "tab" if path.endswith(".tsv") else ","]).splitlines()
         kernels, strict, best_time = {}, {}, None
         for line in out:

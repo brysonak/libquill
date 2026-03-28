@@ -8,6 +8,7 @@ WORDS = ("alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo li
           "mike november oscar papa quebec romeo sierra tango uniform victor whiskey "
           "xray yankee zulu").split()
 UNICODE = ["café", "naïve", "Zürich", "東京", "Москва", "🦆", "ñandú", "Ελλάδα"]
+DEFAULT_SET = [("dense", "1M"), ("dense", "64M"), ("sparse", "64M"), ("mixed", "256M"), ("hostile", "32M")]
 
 
 def parse_size(text):
@@ -97,7 +98,7 @@ def generate(path, size, profile, seed, delim, crlf, bom):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("size")
+    ap.add_argument("size", nargs="?")
     ap.add_argument("--profile", choices=("dense", "sparse", "mixed", "hostile"), default="mixed")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--tsv", action="store_true")
@@ -106,9 +107,11 @@ def main():
     ap.add_argument("--out")
     a = ap.parse_args()
     delim = "\t" if a.tsv else ","
-    path = a.out or os.path.join(HERE, "csv", f"gen_{a.profile}_{a.size}.{'tsv' if a.tsv else 'csv'}")
-    generate(path, parse_size(a.size), a.profile, a.seed, delim, a.crlf, a.bom)
-    print(f"{path}  {os.path.getsize(path) / 1e6:.1f} MB", file=sys.stderr)
+    jobs = [(a.profile, a.size)] if a.size else DEFAULT_SET
+    for profile, size in jobs:
+        path = a.out or os.path.join(HERE, "csv", f"gen_{profile}_{size}.{'tsv' if a.tsv else 'csv'}")
+        generate(path, parse_size(size), profile, a.seed, delim, a.crlf, a.bom)
+        print(f"{path}  {os.path.getsize(path) / 1e6:.1f} MB", file=sys.stderr)
 
 
 if __name__ == "__main__":
