@@ -7,6 +7,7 @@ mkdir := if os_family() == "windows" { "New-Item -ItemType Directory -Force buil
 crt := if os_family() == "windows" { "-D_CRT_SECURE_NO_WARNINGS" } else { "" }
 warn := "-Wall -Wextra -Wpedantic -Werror -Iinclude " + crt
 san := '-O1 -g "-fsanitize=address,undefined" -fno-sanitize-recover=all'
+bflags := ""
 
 copy_asan := if os_family() == "windows" { "Copy-Item -Force '" + `clang "-print-file-name=clang_rt.asan_dynamic-x86_64.dll"` + "' build" } else { "true" }
 
@@ -19,7 +20,7 @@ test:
 
 bench:
     {{mkdir}}
-    {{cc}} -std=c11 {{warn}} -O2 tests/bench.c -o build/bench{{exe}}
+    {{cc}} -std=c11 {{warn}} -O2 {{bflags}} tests/bench.c -o build/bench{{exe}}
     {{py}} tests/run.py bench build
 
 gen *args:
