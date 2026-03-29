@@ -18,7 +18,7 @@ def parse_size(text):
 
 
 def quote(s, delim):
-    if any(c in s for c in (delim, '"', "\n", "\r")):
+    if any(c in s for c in (delim, '"', "\n", "\r")) or s.startswith(" "):
         return '"' + s.replace('"', '""') + '"'
     return s
 
