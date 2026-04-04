@@ -33,6 +33,12 @@ typedef struct {
 } quill_field;
 
 typedef struct {
+    size_t start, end; /* set by the caller */
+    int odd_quotes;
+    uint64_t newlines;
+} quill_range;
+
+typedef struct {
     uint64_t inq, sep, close, cr;
     uint64_t lines, nl_mask, nl_at, gbase, err_at;
     const char *err;
@@ -55,6 +61,7 @@ typedef struct quill_parser {
 
 int quill_init(quill_parser *p, char delim, int flags);
 void quill_feed(quill_parser *p, const char *buf, size_t len, int final);
+void quill_count(const char *buf, quill_range *r);
 int quill_i_next_slow(quill_parser *p, quill_field *f);
 const char *quill_i_unescape(const quill_field *f, char *dst, size_t *len);
 
@@ -466,19 +473,38 @@ static size_t quill_i_run_neon(quill_parser *p, const unsigned char *s, size_t n
 }
 #endif
 
+static void quill_i_count_bytes(const unsigned char *s, size_t n, uint64_t *quotes, uint64_t *lines)
+{
+    const unsigned char *e = s + n;
+    uint64_t q = 0, l = 0;
+    for (; s < e; s++) {
+        q ^= *s == '"';
+        l += *s == '\n';
+    }
+    *quotes ^= q;
+    *lines += l;
+}
+
+static void quill_i_count_scalar(const unsigned char *s, size_t nb, uint64_t *quotes, uint64_t *lines)
+{
+    quill_i_count_bytes(s, 64 * nb, quotes, lines);
+}
+
 typedef size_t (*quill_i_run_fn)(quill_parser *, const unsigned char *, size_t, uint32_t, uint64_t);
+typedef void (*quill_i_count_fn)(const unsigned char *, size_t, uint64_t *, uint64_t *);
 
 static const struct {
     const char *name;
     quill_i_run_fn run;
+    quill_i_count_fn count;
     int level;
 } quill_i_kernels[] = {
-    {"scalar", quill_i_run_scalar, 0},
+    {"scalar", quill_i_run_scalar, quill_i_count_scalar, 0},
 #ifdef QUILL_I_X64
-    {"sse2", quill_i_run_sse2, 1},
-    {"avx2", quill_i_run_avx2, 2},
+    {"sse2", quill_i_run_sse2, quill_i_count_scalar, 1},
+    {"avx2", quill_i_run_avx2, quill_i_count_scalar, 2},
 #elif defined(QUILL_I_NEON)
-    {"neon", quill_i_run_neon, 1},
+    {"neon", quill_i_run_neon, quill_i_count_scalar, 1},
 #endif
 };
 
@@ -619,6 +645,21 @@ int quill_i_next_slow(quill_parser *p, quill_field *f)
         return QUILL_FIELD;
     }
     return QUILL_END;
+}
+
+static void quill_i_count(quill_i_count_fn count, const char *buf, quill_range *r)
+{
+    const unsigned char *s = (const unsigned char *)buf + r->start;
+    size_t len = r->end > r->start ? r->end - r->start : 0;
+    uint64_t quotes = 0, lines = 0;
+    count(s, len / 64, &quotes, &lines);
+    r->odd_quotes = (int)(quill_i_popcount(quotes) & 1);
+    r->newlines = lines;
+}
+
+void quill_count(const char *buf, quill_range *r)
+{
+    quill_i_count(quill_i_kernels[quill_i_best()].count, buf, r);
 }
 
 const char *quill_i_unescape(const quill_field *f, char *dst, size_t *len)
