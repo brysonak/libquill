@@ -318,6 +318,20 @@ static size_t quill_i_run_sse2(quill_parser *p, const unsigned char *s, size_t n
     return p->sparse && !p->st.strict ? quill_i_sse2(p, s, nb, off, valid, 1) : quill_i_sse2(p, s, nb, off, valid, 0);
 }
 
+static void quill_i_count_sse2(const unsigned char *s, size_t nb, uint64_t *quotes, uint64_t *lines)
+{
+    const __m128i Q = _mm_set1_epi8('"'), N = _mm_set1_epi8('\n');
+    for (; nb; nb--, s += 64) {
+        __m128i v[4];
+        v[0] = _mm_loadu_si128((const __m128i *)s);
+        v[1] = _mm_loadu_si128((const __m128i *)(s + 16));
+        v[2] = _mm_loadu_si128((const __m128i *)(s + 32));
+        v[3] = _mm_loadu_si128((const __m128i *)(s + 48));
+        *quotes ^= quill_i_mask_sse2(v, Q);
+        *lines += quill_i_popcount(quill_i_mask_sse2(v, N));
+    }
+}
+
 QUILL_I_TARGET("pclmul")
 QUILL_I_INLINE uint64_t quill_i_clmul(uint64_t q)
 {
@@ -372,6 +386,18 @@ QUILL_I_TARGET("avx2,popcnt,pclmul")
 static size_t quill_i_run_avx2(quill_parser *p, const unsigned char *s, size_t nb, uint32_t off, uint64_t valid)
 {
     return p->sparse && !p->st.strict ? quill_i_avx2(p, s, nb, off, valid, 1) : quill_i_avx2(p, s, nb, off, valid, 0);
+}
+
+QUILL_I_TARGET("avx2,popcnt")
+static void quill_i_count_avx2(const unsigned char *s, size_t nb, uint64_t *quotes, uint64_t *lines)
+{
+    const __m256i Q = _mm256_set1_epi8('"'), N = _mm256_set1_epi8('\n');
+    for (; nb; nb--, s += 64) {
+        __m256i a = _mm256_loadu_si256((const __m256i *)s);
+        __m256i b = _mm256_loadu_si256((const __m256i *)(s + 32));
+        *quotes ^= quill_i_mask_avx2(a, b, Q);
+        *lines += quill_i_popcount(quill_i_mask_avx2(a, b, N));
+    }
 }
 
 static void quill_i_cpuid(unsigned leaf, unsigned r[4])
@@ -501,8 +527,8 @@ static const struct {
 } quill_i_kernels[] = {
     {"scalar", quill_i_run_scalar, quill_i_count_scalar, 0},
 #ifdef QUILL_I_X64
-    {"sse2", quill_i_run_sse2, quill_i_count_scalar, 1},
-    {"avx2", quill_i_run_avx2, quill_i_count_scalar, 2},
+    {"sse2", quill_i_run_sse2, quill_i_count_sse2, 1},
+    {"avx2", quill_i_run_avx2, quill_i_count_avx2, 2},
 #elif defined(QUILL_I_NEON)
     {"neon", quill_i_run_neon, quill_i_count_scalar, 1},
 #endif
