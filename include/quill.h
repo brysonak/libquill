@@ -497,6 +497,21 @@ static size_t quill_i_run_neon(quill_parser *p, const unsigned char *s, size_t n
 {
     return p->sparse && !p->st.strict ? quill_i_neon(p, s, nb, off, valid, 1) : quill_i_neon(p, s, nb, off, valid, 0);
 }
+
+static void quill_i_count_neon(const unsigned char *s, size_t nb, uint64_t *quotes, uint64_t *lines)
+{
+    static const unsigned char weights[16] = {1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128};
+    const uint8x16_t W = vld1q_u8(weights), Q = vdupq_n_u8('"'), N = vdupq_n_u8('\n');
+    for (; nb; nb--, s += 64) {
+        uint8x16_t v[4];
+        v[0] = vld1q_u8(s);
+        v[1] = vld1q_u8(s + 16);
+        v[2] = vld1q_u8(s + 32);
+        v[3] = vld1q_u8(s + 48);
+        *quotes ^= quill_i_mask_neon(v, Q, W);
+        *lines += quill_i_popcount(quill_i_mask_neon(v, N, W));
+    }
+}
 #endif
 
 static void quill_i_count_bytes(const unsigned char *s, size_t n, uint64_t *quotes, uint64_t *lines)
@@ -530,7 +545,7 @@ static const struct {
     {"sse2", quill_i_run_sse2, quill_i_count_sse2, 1},
     {"avx2", quill_i_run_avx2, quill_i_count_avx2, 2},
 #elif defined(QUILL_I_NEON)
-    {"neon", quill_i_run_neon, quill_i_count_scalar, 1},
+    {"neon", quill_i_run_neon, quill_i_count_neon, 1},
 #endif
 };
 
