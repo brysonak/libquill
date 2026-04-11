@@ -51,8 +51,9 @@ typedef struct quill_parser {
     const char *origin;
     size_t (*run)(struct quill_parser *, const unsigned char *, size_t, uint32_t, uint64_t);
     uint64_t off0, line0;
+    size_t stop;
     uint32_t n;
-    unsigned char delim, final, done, row_start, sparse;
+    unsigned char delim, final, done, row_start, halt, skip, sparse;
     quill_i_state st;
     uint64_t err_line, err_col, err_offset;
     const char *err_msg;
@@ -62,6 +63,8 @@ typedef struct quill_parser {
 int quill_init(quill_parser *p, char delim, int flags);
 void quill_feed(quill_parser *p, const char *buf, size_t len, int final);
 void quill_count(const char *buf, quill_range *r);
+int quill_init_range(quill_parser *p, char delim, int flags, const char *buf, size_t len, const quill_range *ranges,
+                     size_t k);
 int quill_i_next_slow(quill_parser *p, quill_field *f);
 const char *quill_i_unescape(const quill_field *f, char *dst, size_t *len);
 
@@ -69,8 +72,14 @@ QUILL_INLINE void quill_i_emit(quill_parser *p, quill_field *f, const char *e, i
 {
     const char *s = p->field;
     p->field = e + 1;
-    if (eol && e > s && e[-1] == '\r')
-        e--;
+    if (eol) {
+        if (e > s && e[-1] == '\r')
+            e--;
+        if ((size_t)(p->field - p->buf) >= p->stop) {
+            p->ie = p->ip;
+            p->halt = 1;
+        }
+    }
     f->quoted = (!last || s < e) && *s == '"';
     if (f->quoted && ++s < e && e[-1] == '"')
         e--;
@@ -580,6 +589,7 @@ int quill_init(quill_parser *p, char delim, int flags)
     p->run = quill_i_kernels[quill_i_best()].run;
     p->delim = c;
     p->row_start = 1;
+    p->stop = (size_t)-1;
     p->st.sep = 1;
     p->st.strict = (flags & QUILL_STRICT) != 0;
     return 0;
@@ -650,6 +660,15 @@ static int quill_i_row_start(const quill_parser *p)
 
 int quill_i_next_slow(quill_parser *p, quill_field *f)
 {
+    if (p->halt)
+        return QUILL_END;
+    if (p->skip) {
+        int rc;
+        p->skip = 0;
+        while ((rc = quill_next(p, f)) == QUILL_FIELD && !f->eol) {
+        }
+        return rc == QUILL_FIELD ? quill_next(p, f) : rc;
+    }
     if (p->err_msg)
         return QUILL_ERROR;
     if (p->st.err)
@@ -701,6 +720,36 @@ static void quill_i_count(quill_i_count_fn count, const char *buf, quill_range *
 void quill_count(const char *buf, quill_range *r)
 {
     quill_i_count(quill_i_kernels[quill_i_best()].count, buf, r);
+}
+
+int quill_init_range(quill_parser *p, char delim, int flags, const char *buf, size_t len, const quill_range *ranges,
+                     size_t k)
+{
+    const quill_range *r = ranges + k;
+    size_t start = r->start, end = r->end, j;
+    unsigned char c;
+    int inq = 0;
+    if (quill_init(p, delim, flags))
+        return -1;
+    for (j = 0; j < k; j++) {
+        inq ^= ranges[j].odd_quotes & 1;
+        p->st.lines += ranges[j].newlines;
+    }
+    p->buf = buf;
+    p->field = p->scan = p->origin = buf + start;
+    p->end = buf + len;
+    p->final = 1;
+    p->stop = end;
+    p->line0 = start;
+    if (start == 0)
+        return 0;
+    c = (unsigned char)buf[start - 1];
+    p->st.inq = 0 - (uint64_t)inq;
+    p->st.sep = !inq && (c == p->delim || c == '\n');
+    p->st.close = !inq && c == '"';
+    p->st.cr = !inq && c == '\r';
+    p->skip = inq || c != '\n';
+    return 0;
 }
 
 const char *quill_i_unescape(const quill_field *f, char *dst, size_t *len)
