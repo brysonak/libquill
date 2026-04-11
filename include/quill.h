@@ -743,6 +743,10 @@ int quill_init_range(quill_parser *p, char delim, int flags, const char *buf, si
     p->final = 1;
     p->stop = end;
     p->line0 = start;
+    if (start == end) {
+        p->halt = 1;
+        return 0;
+    }
     if (start == data)
         return 0;
     c = (unsigned char)buf[start - 1];
