@@ -713,6 +713,7 @@ static void quill_i_count(quill_i_count_fn count, const char *buf, quill_range *
     size_t len = r->end > r->start ? r->end - r->start : 0;
     uint64_t quotes = 0, lines = 0;
     count(s, len / 64, &quotes, &lines);
+    quill_i_count_bytes(s + len / 64 * 64, len % 64, &quotes, &lines);
     r->odd_quotes = (int)(quill_i_popcount(quotes) & 1);
     r->newlines = lines;
 }
