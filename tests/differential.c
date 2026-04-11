@@ -146,11 +146,47 @@ static void finish(quill_parser *p, int rc, result *r)
     }
 }
 
+static void parse_ranges(quill_i_run_fn run, const unsigned char *s, size_t len, char delim, int strict, result *r)
+{
+    quill_range rg[8];
+    size_t n = 1 + (size_t)(next_rand() % 8), k, cut = 0;
+    for (k = 0; k < n; k++) {
+        rg[k].start = cut;
+        if (k + 1 == n)
+            cut = len;
+        else if (next_rand() % 3 == 0)
+            cut += (size_t)(next_rand() % 4);
+        else
+            cut += (size_t)(next_rand() % (len / n * 2 + 1));
+        if (cut > len)
+            cut = len;
+        rg[k].end = cut;
+        quill_i_count(quill_i_kernels[next_rand() % (size_t)(quill_i_best() + 1)].count, (const char *)s, &rg[k]);
+    }
+    for (k = 0; k < n; k++) {
+        quill_field f;
+        int rc;
+        assert(quill_init_range(&P, delim, strict ? QUILL_STRICT : 0, (const char *)s, len, rg, k) == 0);
+        P.run = run;
+        while ((rc = quill_next(&P, &f)) == QUILL_FIELD)
+            collect(&f, r);
+        assert(rc == QUILL_END || rc == QUILL_ERROR);
+        if (rc == QUILL_ERROR) {
+            finish(&P, rc, r);
+            break;
+        }
+    }
+}
+
 static void parse(quill_i_run_fn run, const unsigned char *s, size_t len, char delim, int strict, size_t chunk,
                   result *r)
 {
     quill_field f;
     int rc;
+    if (chunk == (size_t)-1) {
+        parse_ranges(run, s, len, delim, strict, r);
+        return;
+    }
     assert(quill_init(&P, delim, strict ? QUILL_STRICT : 0) == 0);
     P.run = run;
     if (!chunk) {
@@ -192,7 +228,7 @@ static void check(const unsigned char *s, size_t len, char delim, int strict)
 {
     result want = {0};
     size_t k, levels = sizeof quill_i_kernels / sizeof quill_i_kernels[0];
-    static const size_t chunks[] = {0, 1, 7, 64, 200, 5000};
+    static const size_t chunks[] = {0, 1, 7, 64, 200, 5000, (size_t)-1, (size_t)-1, (size_t)-1};
     oracle(s, len, (unsigned char)delim, strict, &want);
     for (k = 0; k < levels && quill_i_kernels[k].level <= quill_i_level(); k++) {
         size_t c;
