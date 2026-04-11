@@ -727,7 +727,8 @@ int quill_init_range(quill_parser *p, char delim, int flags, const char *buf, si
                      size_t k)
 {
     const quill_range *r = ranges + k;
-    size_t start = r->start, end = r->end, j;
+    size_t data = len >= 3 && memcmp(buf, "\xEF\xBB\xBF", 3) == 0 ? 3 : 0;
+    size_t start = r->start < data ? data : r->start, end = r->end < data ? data : r->end, j;
     unsigned char c;
     int inq = 0;
     if (quill_init(p, delim, flags))
@@ -742,7 +743,7 @@ int quill_init_range(quill_parser *p, char delim, int flags, const char *buf, si
     p->final = 1;
     p->stop = end;
     p->line0 = start;
-    if (start == 0)
+    if (start == data)
         return 0;
     c = (unsigned char)buf[start - 1];
     p->st.inq = 0 - (uint64_t)inq;
