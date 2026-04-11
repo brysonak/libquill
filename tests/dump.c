@@ -91,7 +91,7 @@ static char *load(FILE *f, size_t *len)
 static int usage(void)
 {
     fputs("usage: dump [-s] [-d DELIM] [-k KERNEL] [-m "
-          "whole|stream:N] [-c] FILE\n"
+          "whole|stream:N|ranges:N] [-c] FILE\n"
           "       dump -l\n",
           stderr);
     return 2;
@@ -136,7 +136,7 @@ int main(int argc, char **argv)
     }
     if (!path || !(in = fopen(path, "rb")))
         return path ? (fprintf(stderr, "cannot open %s\n", path), 2) : usage();
-    if (!strncmp(mode, "stream:", 7))
+    if (!strncmp(mode, "stream:", 7) || !strncmp(mode, "ranges:", 7))
         n = (size_t)strtoul(mode + 7, NULL, 10);
     if (strcmp(mode, "whole") && !n)
         return usage();
@@ -177,18 +177,41 @@ int main(int argc, char **argv)
     }
 
     {
-        size_t len;
+        size_t len, r;
         char *buf = load(in, &len);
         fclose(in);
         if (!buf)
             return 2;
-        if (quill_init(&p, delim, strict))
-            return usage();
-        p.run = quill_i_kernels[k].run;
-        quill_feed(&p, buf, len, 1);
-        while ((rc = quill_next(&p, &f)) == QUILL_FIELD)
-            emit(&f);
-        free(buf);
-        return finish(&p, rc);
+        if (!strcmp(mode, "whole")) {
+            if (quill_init(&p, delim, strict))
+                return usage();
+            p.run = quill_i_kernels[k].run;
+            quill_feed(&p, buf, len, 1);
+            while ((rc = quill_next(&p, &f)) == QUILL_FIELD)
+                emit(&f);
+            free(buf);
+            return finish(&p, rc);
+        }
+        {
+            quill_range *rg = (quill_range *)malloc(n * sizeof *rg);
+            if (!rg)
+                return 2;
+            for (r = 0; r < n; r++) {
+                rg[r].start = len / n * r;
+                rg[r].end = r + 1 == n ? len : len / n * (r + 1);
+                quill_i_count(quill_i_kernels[k].count, buf, &rg[r]);
+            }
+            rc = QUILL_END;
+            for (r = 0; r < n && rc != QUILL_ERROR; r++) {
+                if (quill_init_range(&p, delim, strict, buf, len, rg, r))
+                    return usage();
+                p.run = quill_i_kernels[k].run;
+                while ((rc = quill_next(&p, &f)) == QUILL_FIELD)
+                    emit(&f);
+            }
+            free(rg);
+            free(buf);
+            return finish(&p, rc);
+        }
     }
 }
