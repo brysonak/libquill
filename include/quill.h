@@ -731,7 +731,7 @@ int quill_init_range(quill_parser *p, char delim, int flags, const char *buf, si
     size_t start = r->start < data ? data : r->start, end = r->end < data ? data : r->end, j;
     unsigned char c;
     int inq = 0;
-    if (quill_init(p, delim, flags))
+    if (r->start > r->end || r->end > len || quill_init(p, delim, flags))
         return -1;
     for (j = 0; j < k; j++) {
         inq ^= ranges[j].odd_quotes & 1;
