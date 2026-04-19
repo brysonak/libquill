@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include <pthread.h>
 #include <unistd.h>
@@ -22,6 +23,13 @@ typedef struct {
     size_t nhits, cap;
     int failed;
 } job;
+
+static double now(void)
+{
+    struct timespec ts;
+    timespec_get(&ts, TIME_UTC);
+    return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+}
 
 static int cores(void)
 {
@@ -123,15 +131,21 @@ static void *search_job(void *arg)
     return NULL;
 }
 
-/* Returns 0 on failure. quill_init_range only reads the ranges before k, so the
-   last range is never counted */
-static int run(const char *buf, size_t len, const char *name, size_t n)
+typedef struct {
+    double count, search;
+    uint64_t rows, fields, hits;
+} result;
+
+/* Returns 0 on failure, lists the first matches by global row.
+   quill_init_range only reads the ranges before k, so the last range is never counted */
+static int run(const char *buf, size_t len, const char *name, size_t n, result *res)
 {
     static quill_range ranges[MAX_THREADS];
     static job jobs[MAX_THREADS];
     pthread_t t[MAX_THREADS];
     size_t k, started, shown = 0;
-    uint64_t row_base = 0, rows = 0, fields = 0, hits = 0;
+    uint64_t row_base = 0;
+    double t0, t1, t2;
     for (k = 0; k < n; k++) {
         ranges[k].start = len / n * k;
         ranges[k].end = k + 1 == n ? len : len / n * (k + 1);
@@ -143,18 +157,24 @@ static int run(const char *buf, size_t len, const char *name, size_t n)
         jobs[k].k = k;
         jobs[k].ranges = ranges;
     }
+    t0 = now();
     for (started = 0; started + 1 < n && pthread_create(&t[started], NULL, count_job, &jobs[started]) == 0; started++) {
     }
     for (k = 0; k < started; k++)
         pthread_join(t[k], NULL);
     if (started + 1 < n)
         return 0;
+    t1 = now();
     for (started = 0; started < n && pthread_create(&t[started], NULL, search_job, &jobs[started]) == 0; started++) {
     }
     for (k = 0; k < started; k++)
         pthread_join(t[k], NULL);
+    t2 = now();
     if (started < n)
         return 0;
+    memset(res, 0, sizeof *res);
+    res->count = t1 - t0;
+    res->search = t2 - t1;
     for (k = 0; k < n; k++)
         if (jobs[k].failed)
             return 0;
@@ -164,24 +184,32 @@ static int run(const char *buf, size_t len, const char *name, size_t n)
             printf("  row %llu, column %llu\n", (unsigned long long)(row_base + jobs[k].hits[h].row),
                    (unsigned long long)jobs[k].hits[h].col);
         row_base += jobs[k].rows;
-        rows += jobs[k].rows;
-        fields += jobs[k].fields;
-        hits += jobs[k].nhits;
+        res->rows += jobs[k].rows;
+        res->fields += jobs[k].fields;
+        res->hits += jobs[k].nhits;
         free(jobs[k].hits);
     }
-    if (hits > shown)
-        printf("  ... and %llu more\n", (unsigned long long)(hits - shown));
-    printf("%llu matches in %llu rows, %llu fields\n", (unsigned long long)hits, (unsigned long long)rows,
-           (unsigned long long)fields);
+    if (res->hits > shown)
+        printf("  ... and %llu more\n", (unsigned long long)(res->hits - shown));
     return 1;
+}
+
+static void report(const char *label, size_t len, const result *r)
+{
+    double total = r->count + r->search;
+    printf("%-10s %8.1f ms  (count %6.1f ms, search %7.1f ms)  %6.2f GB/s\n", label, total * 1e3, r->count * 1e3,
+           r->search * 1e3, (double)len / total / 1e9);
 }
 
 int main(int argc, char **argv)
 {
     const char *path = argc > 1 ? argv[1] : "big.csv", *name = argc > 2 ? argv[2] : "Debbie";
     int threads = argc > 3 ? atoi(argv[3]) : cores();
+    result res;
     size_t len;
+    double t0 = now(), load_time;
     char *buf = load(path, &len);
+    load_time = now() - t0;
     if (!buf) {
         fprintf(stderr, "cannot read %s\n", path);
         return 1;
@@ -190,11 +218,18 @@ int main(int argc, char **argv)
         fprintf(stderr, "threads must be 1 to %d\n", MAX_THREADS);
         return 1;
     }
-    printf("%s: %.1f MB, %d threads\n", path, (double)len / 1e6, threads);
+    printf("%s: %.1f MB, loaded in %.1f ms\n", path, (double)len / 1e6, load_time * 1e3);
     printf("fields equal to \"%s\":\n", name);
-    if (!run(buf, len, name, (size_t)threads)) {
+    if (!run(buf, len, name, (size_t)threads, &res)) {
         fprintf(stderr, "out of memory or cannot start threads\n");
         return 1;
+    }
+    printf("%llu matches in %llu rows, %llu fields\n\n", (unsigned long long)res.hits, (unsigned long long)res.rows,
+           (unsigned long long)res.fields);
+    {
+        char label[32];
+        sprintf(label, "%d threads", threads);
+        report(label, len, &res);
     }
     free(buf);
     return 0;
