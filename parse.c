@@ -136,9 +136,9 @@ typedef struct {
     uint64_t rows, fields, hits;
 } result;
 
-/* Returns 0 on failure, lists the first matches by global row.
+/* Returns 0 on failure, with print set it lists the first matches by global row.
    quill_init_range only reads the ranges before k, so the last range is never counted */
-static int run(const char *buf, size_t len, const char *name, size_t n, result *res)
+static int run(const char *buf, size_t len, const char *name, size_t n, int print, result *res)
 {
     static quill_range ranges[MAX_THREADS];
     static job jobs[MAX_THREADS];
@@ -180,7 +180,7 @@ static int run(const char *buf, size_t len, const char *name, size_t n, result *
             return 0;
     for (k = 0; k < n; k++) {
         size_t h;
-        for (h = 0; h < jobs[k].nhits && shown < 10; h++, shown++)
+        for (h = 0; print && h < jobs[k].nhits && shown < 10; h++, shown++)
             printf("  row %llu, column %llu\n", (unsigned long long)(row_base + jobs[k].hits[h].row),
                    (unsigned long long)jobs[k].hits[h].col);
         row_base += jobs[k].rows;
@@ -189,7 +189,7 @@ static int run(const char *buf, size_t len, const char *name, size_t n, result *
         res->hits += jobs[k].nhits;
         free(jobs[k].hits);
     }
-    if (res->hits > shown)
+    if (print && res->hits > shown)
         printf("  ... and %llu more\n", (unsigned long long)(res->hits - shown));
     return 1;
 }
@@ -205,7 +205,7 @@ int main(int argc, char **argv)
 {
     const char *path = argc > 1 ? argv[1] : "big.csv", *name = argc > 2 ? argv[2] : "Debbie";
     int threads = argc > 3 ? atoi(argv[3]) : cores();
-    result res;
+    result one, many;
     size_t len;
     double t0 = now(), load_time;
     char *buf = load(path, &len);
@@ -220,17 +220,24 @@ int main(int argc, char **argv)
     }
     printf("%s: %.1f MB, loaded in %.1f ms\n", path, (double)len / 1e6, load_time * 1e3);
     printf("fields equal to \"%s\":\n", name);
-    if (!run(buf, len, name, (size_t)threads, &res)) {
+    if (!run(buf, len, name, (size_t)threads, 1, &many) || !run(buf, len, name, 1, 0, &one) ||
+        !run(buf, len, name, (size_t)threads, 0, &many)) {
         fprintf(stderr, "out of memory or cannot start threads\n");
         return 1;
     }
-    printf("%llu matches in %llu rows, %llu fields\n\n", (unsigned long long)res.hits, (unsigned long long)res.rows,
-           (unsigned long long)res.fields);
+    if (one.hits != many.hits || one.rows != many.rows) {
+        fprintf(stderr, "1 thread and %d threads disagree\n", threads);
+        return 1;
+    }
+    printf("%llu matches in %llu rows, %llu fields\n\n", (unsigned long long)many.hits,
+           (unsigned long long)many.rows, (unsigned long long)many.fields);
+    report("1 thread", len, &one);
     {
         char label[32];
         sprintf(label, "%d threads", threads);
-        report(label, len, &res);
+        report(label, len, &many);
     }
+    printf("speedup    %8.2fx\n", (one.count + one.search) / (many.count + many.search));
     free(buf);
     return 0;
 }
