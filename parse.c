@@ -17,6 +17,7 @@ typedef struct {
 typedef struct {
     const char *buf, *name;
     size_t len, name_len, k;
+    int name_quote;
     quill_range *ranges;
     uint64_t rows, fields;
     match *hits;
@@ -94,7 +95,7 @@ static void *search_job(void *arg)
         j->fields++;
         col++;
         if (f.len == j->name_len) {
-            hit = !memcmp(f.ptr, j->name, f.len);
+            hit = !j->name_quote && !memcmp(f.ptr, j->name, f.len);
         } else if (f.quoted && f.len > j->name_len && memchr(f.ptr, '"', f.len)) {
             size_t n;
             const char *v;
@@ -154,6 +155,7 @@ static int run(const char *buf, size_t len, const char *name, size_t n, int prin
         jobs[k].len = len;
         jobs[k].name = name;
         jobs[k].name_len = strlen(name);
+        jobs[k].name_quote = strchr(name, '"') != NULL;
         jobs[k].k = k;
         jobs[k].ranges = ranges;
     }
