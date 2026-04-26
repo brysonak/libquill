@@ -76,14 +76,16 @@ static void *count_job(void *arg)
 
 /* Unquoted fields and quoted ones without inner quotes are their own value, so
    only a same length byte compare is needed. Quoted fields with inner quotes are
-   unescaped first, unescaping only shrinks them, hence the length check */
+   unescaped first, unescaping only shrinks them, hence the length check.
+   Counters live in locals until the end, jobs sit side by side in memory and per
+   field stores to them would make the threads fight over cache lines */
 static void *search_job(void *arg)
 {
     job *j = (job *)arg;
     quill_parser *p = (quill_parser *)malloc(sizeof *p);
     char *tmp = NULL;
     size_t cap = 0;
-    uint64_t col = 0;
+    uint64_t rows = 0, fields = 0, col = 0;
     quill_field f;
     if (!p || quill_init_range(p, ',', 0, j->buf, j->len, j->ranges, j->k)) {
         j->failed = 1;
@@ -92,7 +94,7 @@ static void *search_job(void *arg)
     }
     while (quill_next(p, &f) == QUILL_FIELD) {
         int hit = 0;
-        j->fields++;
+        fields++;
         col++;
         if (f.len == j->name_len) {
             hit = !j->name_quote && !memcmp(f.ptr, j->name, f.len);
@@ -119,14 +121,16 @@ static void *search_job(void *arg)
                 }
                 j->hits = t;
             }
-            j->hits[j->nhits].row = j->rows + 1;
+            j->hits[j->nhits].row = rows + 1;
             j->hits[j->nhits++].col = col;
         }
         if (f.eol) {
-            j->rows++;
+            rows++;
             col = 0;
         }
     }
+    j->rows = rows;
+    j->fields = fields;
     free(tmp);
     free(p);
     return NULL;
