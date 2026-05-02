@@ -91,7 +91,7 @@ static char *load(FILE *f, size_t *len)
 static int usage(void)
 {
     fputs("usage: dump [-s] [-d DELIM] [-k KERNEL] [-m "
-          "whole|stream:N|ranges:N] [-c] FILE\n"
+          "whole|stream:N|ranges:N|guess:N] [-c] FILE\n"
           "       dump -l\n",
           stderr);
     return 2;
@@ -138,6 +138,8 @@ int main(int argc, char **argv)
         return path ? (fprintf(stderr, "cannot open %s\n", path), 2) : usage();
     if (!strncmp(mode, "stream:", 7) || !strncmp(mode, "ranges:", 7))
         n = (size_t)strtoul(mode + 7, NULL, 10);
+    if (!strncmp(mode, "guess:", 6))
+        n = (size_t)strtoul(mode + 6, NULL, 10);
     if (strcmp(mode, "whole") && !n)
         return usage();
     setvbuf(stdout, NULL, _IOFBF, 1 << 16);
@@ -196,13 +198,27 @@ int main(int argc, char **argv)
             quill_range *rg = (quill_range *)malloc(n * sizeof *rg);
             if (!rg)
                 return 2;
+            int guess = !strncmp(mode, "guess:", 6) && !strict;
             for (r = 0; r < n; r++) {
                 rg[r].start = len / n * r;
                 rg[r].end = r + 1 == n ? len : len / n * (r + 1);
-                quill_i_count(quill_i_kernels[k].count, buf, &rg[r]);
+                if (!guess)
+                    quill_i_count(quill_i_kernels[k].count, buf, &rg[r]);
             }
             rc = QUILL_END;
             for (r = 0; r < n && rc != QUILL_ERROR; r++) {
+                if (guess) {
+                    if (quill_init_guess(&p, delim, 0, buf, len, rg, r))
+                        return usage();
+                    p.run = quill_i_kernels[k].run;
+                    if (quill_guess_ok(rg, r)) {
+                        while ((rc = quill_next(&p, &f)) == QUILL_FIELD)
+                            emit(&f);
+                        continue;
+                    }
+                    while (quill_next(&p, &f) == QUILL_FIELD) {
+                    }
+                }
                 if (quill_init_range(&p, delim, strict, buf, len, rg, r))
                     return usage();
                 p.run = quill_i_kernels[k].run;
