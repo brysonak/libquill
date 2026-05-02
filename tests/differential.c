@@ -339,7 +339,7 @@ int main(void)
     assert(quill_init(&P, '"', 0) < 0 && quill_init(&P, '\n', 0) < 0 && quill_init(&P, '\r', 0) < 0);
     assert(quill_init(&P, 0, 0) < 0);
     {
-        quill_range bad = {2, 1, 0, 0};
+        quill_range bad = {2, 1, 0, 0, 0};
         assert(quill_init_range(&P, ',', 0, "abc", 3, &bad, 0) < 0);
         bad.start = 0;
         bad.end = 4;

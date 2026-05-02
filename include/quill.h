@@ -35,6 +35,7 @@ typedef struct {
 typedef struct {
     size_t start, end; /* set by the caller */
     int odd_quotes;
+    int guess;
     uint64_t newlines;
 } quill_range;
 
@@ -54,6 +55,7 @@ typedef struct quill_parser {
     size_t stop;
     uint32_t n;
     unsigned char delim, final, done, row_start, halt, skip, sparse;
+    quill_range *guessed;
     quill_i_state st;
     uint64_t err_line, err_col, err_offset;
     const char *err_msg;
@@ -65,6 +67,9 @@ void quill_feed(quill_parser *p, const char *buf, size_t len, int final);
 void quill_count(const char *buf, quill_range *r);
 int quill_init_range(quill_parser *p, char delim, int flags, const char *buf, size_t len, const quill_range *ranges,
                      size_t k);
+int quill_init_guess(quill_parser *p, char delim, int flags, const char *buf, size_t len, quill_range *ranges,
+                     size_t k);
+int quill_guess_ok(const quill_range *ranges, size_t k);
 int quill_i_next_slow(quill_parser *p, quill_field *f);
 const char *quill_i_unescape(const quill_field *f, char *dst, size_t *len);
 
@@ -658,7 +663,7 @@ static int quill_i_row_start(const quill_parser *p)
     return p->field > p->origin ? (unsigned char)p->field[-1] != p->delim : p->row_start;
 }
 
-int quill_i_next_slow(quill_parser *p, quill_field *f)
+static int quill_i_slow(quill_parser *p, quill_field *f)
 {
     if (p->halt)
         return QUILL_END;
@@ -723,20 +728,17 @@ void quill_count(const char *buf, quill_range *r)
     quill_i_count(quill_i_kernels[quill_i_best()].count, buf, r);
 }
 
-int quill_init_range(quill_parser *p, char delim, int flags, const char *buf, size_t len, const quill_range *ranges,
-                     size_t k)
+static size_t quill_i_data_start(const char *buf, size_t len)
 {
-    const quill_range *r = ranges + k;
-    size_t data = len >= 3 && memcmp(buf, "\xEF\xBB\xBF", 3) == 0 ? 3 : 0;
-    size_t start = r->start < data ? data : r->start, end = r->end < data ? data : r->end, j;
+    return len >= 3 && memcmp(buf, "\xEF\xBB\xBF", 3) == 0 ? 3 : 0;
+}
+
+/* Starts p at range r given the quote state inq just before it */
+static void quill_i_start_range(quill_parser *p, const char *buf, size_t len, const quill_range *r, int inq)
+{
+    size_t data = quill_i_data_start(buf, len);
+    size_t start = r->start < data ? data : r->start, end = r->end < data ? data : r->end;
     unsigned char c;
-    int inq = 0;
-    if (r->start > r->end || r->end > len || quill_init(p, delim, flags))
-        return -1;
-    for (j = 0; j < k; j++) {
-        inq ^= ranges[j].odd_quotes & 1;
-        p->st.lines += ranges[j].newlines;
-    }
     p->buf = buf;
     p->field = p->scan = p->origin = buf + start;
     p->end = buf + len;
@@ -745,17 +747,88 @@ int quill_init_range(quill_parser *p, char delim, int flags, const char *buf, si
     p->line0 = start;
     if (start == end) {
         p->halt = 1;
-        return 0;
+        return;
     }
     if (start == data)
-        return 0;
+        return;
     c = (unsigned char)buf[start - 1];
     p->st.inq = 0 - (uint64_t)inq;
     p->st.sep = !inq && (c == p->delim || c == '\n');
     p->st.close = !inq && c == '"';
     p->st.cr = !inq && c == '\r';
     p->skip = inq || c != '\n';
+}
+
+int quill_init_range(quill_parser *p, char delim, int flags, const char *buf, size_t len, const quill_range *ranges,
+                     size_t k)
+{
+    const quill_range *r = ranges + k;
+    size_t j;
+    int inq = 0;
+    if (r->start > r->end || r->end > len || quill_init(p, delim, flags))
+        return -1;
+    for (j = 0; j < k; j++) {
+        inq ^= ranges[j].odd_quotes & 1;
+        p->st.lines += ranges[j].newlines;
+    }
+    quill_i_start_range(p, buf, len, r, inq);
     return 0;
+}
+
+static int quill_i_guess(const char *buf, size_t len, size_t start, unsigned char delim)
+{
+    const char *s = buf + start, *lim = buf + (len - start > 65536 ? start + 65536 : len), *q;
+    int parity = 0;
+    while ((q = (const char *)memchr(s, '"', (size_t)(lim - s))) != NULL) {
+        unsigned char next = (unsigned char)q[1];
+        unsigned char prev = (unsigned char)q[-1];
+        if (next != '"' && next != delim && next != '\n' && next != '\r')
+            return parity;
+        if (prev != '"' && prev != delim && prev != '\n' && prev != '\r')
+            return !parity;
+        parity = !parity;
+        s = q + 1;
+    }
+    return 0;
+}
+
+int quill_init_guess(quill_parser *p, char delim, int flags, const char *buf, size_t len, quill_range *ranges, size_t k)
+{
+    quill_range *r = ranges + k;
+    size_t data = quill_i_data_start(buf, len);
+    if (r->start > r->end || r->end > len || quill_init(p, delim, flags))
+        return -1;
+    r->guess = r->start <= data || r->start == r->end ? 0 : quill_i_guess(buf, len, r->start, p->delim);
+    r->odd_quotes = 0;
+    quill_i_start_range(p, buf, len, r, r->guess);
+    p->guessed = r;
+    return 0;
+}
+
+int quill_guess_ok(const quill_range *ranges, size_t k)
+{
+    size_t j;
+    int inq = 0;
+    for (j = 0; j < k; j++)
+        inq ^= ranges[j].odd_quotes & 1;
+    return inq == ranges[k].guess;
+}
+
+static void quill_i_finish_guess(quill_parser *p)
+{
+    quill_range *r = p->guessed;
+    p->guessed = NULL;
+    if (r->start == r->end)
+        return;
+    r->odd_quotes = (int)(p->st.inq & 1) ^ r->guess;
+}
+
+int quill_i_next_slow(quill_parser *p, quill_field *f)
+{
+    int rc = quill_i_slow(p, f);
+    if (rc == QUILL_END && p->guessed)
+        quill_i_finish_guess(p);
+    return rc;
 }
 
 const char *quill_i_unescape(const quill_field *f, char *dst, size_t *len)
