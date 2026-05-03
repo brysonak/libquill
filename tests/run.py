@@ -9,8 +9,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CSV_DIR = os.path.join(HERE, "csv")
 EXE = ".exe" if os.name == "nt" else ""
 PY_LIMIT = 16 << 20
-SMALL_MODES = ["whole", "stream:1", "stream:7", "stream:64", "stream:4096", "ranges:2", "ranges:5"]
-BIG_MODES = ["whole", "stream:65536", "ranges:8"]
+SMALL_MODES = ["whole", "stream:1", "stream:7", "stream:64", "stream:4096", "ranges:2", "ranges:5", "guess:2", "guess:5"]
+BIG_MODES = ["whole", "stream:65536", "ranges:8", "guess:8"]
 
 
 NTSTATUS = {
