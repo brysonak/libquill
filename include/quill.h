@@ -816,11 +816,16 @@ int quill_guess_ok(const quill_range *ranges, size_t k)
 
 static void quill_i_finish_guess(quill_parser *p)
 {
-    quill_range *r = p->guessed;
+    quill_range *r = p->guessed, tail;
+    size_t data = quill_i_data_start(p->buf, (size_t)(p->end - p->buf));
+    size_t end = r->end < data ? data : r->end, scan = (size_t)(p->scan - p->buf);
     p->guessed = NULL;
     if (r->start == r->end)
         return;
-    r->odd_quotes = (int)(p->st.inq & 1) ^ r->guess;
+    tail.start = end;
+    tail.end = scan > end ? scan : end;
+    quill_count(p->buf, &tail);
+    r->odd_quotes = (int)(p->st.inq & 1) ^ r->guess ^ tail.odd_quotes;
 }
 
 int quill_i_next_slow(quill_parser *p, quill_field *f)
