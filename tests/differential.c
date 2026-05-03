@@ -146,10 +146,15 @@ static void finish(quill_parser *p, int rc, result *r)
     }
 }
 
+static uint64_t guesses, wrong_guesses;
+
 static void parse_ranges(quill_i_run_fn run, const unsigned char *s, size_t len, char delim, int strict, result *r)
 {
     quill_range rg[8];
+    result part[8];
     size_t n = 1 + (size_t)(next_rand() % 8), k, cut = 0;
+    int guess = !strict && next_rand() % 2;
+    memset(part, 0, sizeof part);
     for (k = 0; k < n; k++) {
         rg[k].start = cut;
         if (k + 1 == n)
@@ -161,21 +166,50 @@ static void parse_ranges(quill_i_run_fn run, const unsigned char *s, size_t len,
         if (cut > len)
             cut = len;
         rg[k].end = cut;
-        quill_i_count(quill_i_kernels[next_rand() % (size_t)(quill_i_best() + 1)].count, (const char *)s, &rg[k]);
+        if (!guess)
+            quill_i_count(quill_i_kernels[next_rand() % (size_t)(quill_i_best() + 1)].count, (const char *)s, &rg[k]);
     }
     for (k = 0; k < n; k++) {
         quill_field f;
         int rc;
-        assert(quill_init_range(&P, delim, strict ? QUILL_STRICT : 0, (const char *)s, len, rg, k) == 0);
+        if (guess)
+            assert(quill_init_guess(&P, delim, 0, (const char *)s, len, rg, k) == 0);
+        else
+            assert(quill_init_range(&P, delim, strict ? QUILL_STRICT : 0, (const char *)s, len, rg, k) == 0);
         P.run = run;
         while ((rc = quill_next(&P, &f)) == QUILL_FIELD)
-            collect(&f, r);
+            collect(&f, &part[k]);
         assert(rc == QUILL_END || rc == QUILL_ERROR);
         if (rc == QUILL_ERROR) {
-            finish(&P, rc, r);
+            finish(&P, rc, &part[k]);
+            n = k + 1;
             break;
         }
     }
+    for (k = 0; k < n; k++) {
+        if (guess) {
+            guesses++;
+            if (!quill_guess_ok(rg, k)) {
+                quill_field f;
+                wrong_guesses++;
+                part[k].n = 0;
+                assert(quill_init_range(&P, delim, 0, (const char *)s, len, rg, k) == 0);
+                P.run = run;
+                while (quill_next(&P, &f) == QUILL_FIELD)
+                    collect(&f, &part[k]);
+            }
+        }
+        put(r, part[k].b, part[k].n);
+        if (part[k].msg) {
+            r->msg = part[k].msg;
+            r->line = part[k].line;
+            r->col = part[k].col;
+            r->off = part[k].off;
+        }
+        free(part[k].b);
+    }
+    for (; k < 8; k++)
+        free(part[k].b);
 }
 
 static void parse(quill_i_run_fn run, const unsigned char *s, size_t len, char delim, int strict, size_t chunk,
@@ -366,7 +400,8 @@ int main(void)
         }
         check(buf, len, delim, strict);
     }
-    printf("ok, %d cases\n", i);
+    printf("ok, %d cases, %llu of %llu range guesses wrong and re-parsed\n", i, (unsigned long long)wrong_guesses,
+           (unsigned long long)guesses);
     return 0;
 }
 #endif
