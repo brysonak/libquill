@@ -780,7 +780,7 @@ static int quill_i_guess(const char *buf, size_t len, size_t start, unsigned cha
     const char *s = buf + start, *lim = buf + (len - start > 65536 ? start + 65536 : len), *q;
     int parity = 0;
     while ((q = (const char *)memchr(s, '"', (size_t)(lim - s))) != NULL) {
-        unsigned char next = (unsigned char)q[1];
+        unsigned char next = q + 1 < buf + len ? (unsigned char)q[1] : '\n';
         unsigned char prev = (unsigned char)q[-1];
         if (next != '"' && next != delim && next != '\n' && next != '\r')
             return parity;
