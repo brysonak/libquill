@@ -796,7 +796,7 @@ int quill_init_guess(quill_parser *p, char delim, int flags, const char *buf, si
 {
     quill_range *r = ranges + k;
     size_t data = quill_i_data_start(buf, len);
-    if (r->start > r->end || r->end > len || quill_init(p, delim, flags))
+    if (r->start > r->end || r->end > len || (flags & QUILL_STRICT) || quill_init(p, delim, flags))
         return -1;
     r->guess = r->start <= data || r->start == r->end ? 0 : quill_i_guess(buf, len, r->start, p->delim);
     r->odd_quotes = 0;
