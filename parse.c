@@ -5,8 +5,24 @@
 #include <stdlib.h>
 #include <time.h>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <threads.h>
+#include <windows.h>
+typedef thrd_t thread;
+#define WORKER(name) static int name(void *arg)
+#define WORKER_END return 0
+#define SPAWN(t, fn, arg) (thrd_create(&(t), fn, arg) == thrd_success)
+#define JOIN(t) thrd_join(t, NULL)
+#else
 #include <pthread.h>
 #include <unistd.h>
+typedef pthread_t thread;
+#define WORKER(name) static void *name(void *arg)
+#define WORKER_END return NULL
+#define SPAWN(t, fn, arg) (pthread_create(&(t), NULL, fn, arg) == 0)
+#define JOIN(t) pthread_join(t, NULL)
+#endif
 
 #define MAX_THREADS 256
 
@@ -34,8 +50,14 @@ static double now(void)
 
 static int cores(void)
 {
+#ifdef _WIN32
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    return (int)si.dwNumberOfProcessors;
+#else
     long n = sysconf(_SC_NPROCESSORS_ONLN);
     return n > 0 ? (int)n : 1;
+#endif
 }
 
 static char *load(const char *path, size_t *len)
@@ -67,11 +89,11 @@ static char *load(const char *path, size_t *len)
     return s;
 }
 
-static void *count_job(void *arg)
+WORKER(count_job)
 {
     job *j = (job *)arg;
     quill_count(j->buf, &j->ranges[j->k]);
-    return NULL;
+    WORKER_END;
 }
 
 /* Unquoted fields and quoted ones without inner quotes are their own value, so
@@ -79,7 +101,7 @@ static void *count_job(void *arg)
    unescaped first, unescaping only shrinks them, hence the length check.
    Counters live in locals until the end, jobs sit side by side in memory and per
    field stores to them would make the threads fight over cache lines */
-static void *search_job(void *arg)
+WORKER(search_job)
 {
     job *j = (job *)arg;
     quill_parser *p = (quill_parser *)malloc(sizeof *p);
@@ -90,7 +112,7 @@ static void *search_job(void *arg)
     if (!p || quill_init_range(p, ',', 0, j->buf, j->len, j->ranges, j->k)) {
         j->failed = 1;
         free(p);
-        return NULL;
+        WORKER_END;
     }
     while (quill_next(p, &f) == QUILL_FIELD) {
         int hit = 0;
@@ -133,7 +155,7 @@ static void *search_job(void *arg)
     j->fields = fields;
     free(tmp);
     free(p);
-    return NULL;
+    WORKER_END;
 }
 
 typedef struct {
@@ -147,7 +169,7 @@ static int run(const char *buf, size_t len, const char *name, size_t n, int prin
 {
     static quill_range ranges[MAX_THREADS];
     static job jobs[MAX_THREADS];
-    pthread_t t[MAX_THREADS];
+    thread t[MAX_THREADS];
     size_t k, started, shown = 0;
     uint64_t row_base = 0;
     double t0, t1, t2;
@@ -164,17 +186,17 @@ static int run(const char *buf, size_t len, const char *name, size_t n, int prin
         jobs[k].ranges = ranges;
     }
     t0 = now();
-    for (started = 0; started + 1 < n && pthread_create(&t[started], NULL, count_job, &jobs[started]) == 0; started++) {
+    for (started = 0; started + 1 < n && SPAWN(t[started], count_job, &jobs[started]); started++) {
     }
     for (k = 0; k < started; k++)
-        pthread_join(t[k], NULL);
+        JOIN(t[k]);
     if (started + 1 < n)
         return 0;
     t1 = now();
-    for (started = 0; started < n && pthread_create(&t[started], NULL, search_job, &jobs[started]) == 0; started++) {
+    for (started = 0; started < n && SPAWN(t[started], search_job, &jobs[started]); started++) {
     }
     for (k = 0; k < started; k++)
-        pthread_join(t[k], NULL);
+        JOIN(t[k]);
     t2 = now();
     if (started < n)
         return 0;
