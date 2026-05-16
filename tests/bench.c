@@ -5,13 +5,116 @@
 #include <stdlib.h>
 #include <time.h>
 
+#ifdef _WIN32
+#include <threads.h>
+typedef thrd_t thread;
+#define WORKER(name)      static int name(void *arg)
+#define WORKER_END        return 0
+#define SPAWN(t, fn, arg) (thrd_create(&(t), fn, arg) == thrd_success)
+#define JOIN(t)           thrd_join(t, NULL)
+#else
+#include <pthread.h>
+typedef pthread_t thread;
+#define WORKER(name)      static void *name(void *arg)
+#define WORKER_END        return NULL
+#define SPAWN(t, fn, arg) (pthread_create(&(t), NULL, fn, arg) == 0)
+#define JOIN(t)           pthread_join(t, NULL)
+#endif
+
+#define MAX_THREADS 16
+
 static char delim = ',';
+
+typedef struct {
+    const char *buf;
+    size_t len, k, fields, bytes;
+    quill_range *ranges;
+    int guess;
+} job;
 
 static double now(void)
 {
     struct timespec ts;
     timespec_get(&ts, TIME_UTC);
     return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+}
+
+WORKER(count_job)
+{
+    job *j = (job *)arg;
+    quill_count(j->buf, &j->ranges[j->k]);
+    WORKER_END;
+}
+
+WORKER(parse_job)
+{
+    job *j = (job *)arg;
+    quill_parser *p = (quill_parser *)malloc(sizeof *p);
+    char *tmp = NULL;
+    size_t cap = 0, fields = 0, bytes = 0;
+    quill_field f;
+    int rc = !p       ? -1
+           : j->guess ? quill_init_guess(p, delim, 0, j->buf, j->len, j->ranges, j->k)
+                      : quill_init_range(p, delim, 0, j->buf, j->len, j->ranges, j->k);
+    if (p && rc == 0) {
+        while (quill_next(p, &f) == QUILL_FIELD) {
+            size_t n;
+            if (f.len > cap) {
+                char *t = (char *)realloc(tmp, f.len * 2);
+                if (!t)
+                    break;
+                tmp = t;
+                cap = f.len * 2;
+            }
+            quill_value(&f, tmp, &n);
+            fields++;
+            bytes += n;
+        }
+    }
+    j->fields = fields;
+    j->bytes = bytes;
+    free(tmp);
+    free(p);
+    WORKER_END;
+}
+
+static int parse_threaded(const char *buf, size_t len, size_t n, int guess, size_t *fields, size_t *bytes)
+{
+    quill_range r[MAX_THREADS];
+    job jobs[MAX_THREADS];
+    thread t[MAX_THREADS];
+    size_t k, started;
+    for (k = 0; k < n; k++) {
+        r[k].start = len / n * k;
+        r[k].end = k + 1 == n ? len : len / n * (k + 1);
+        jobs[k].buf = buf;
+        jobs[k].len = len;
+        jobs[k].k = k;
+        jobs[k].ranges = r;
+        jobs[k].guess = guess;
+    }
+    if (!guess) {
+        for (started = 0; started + 1 < n && SPAWN(t[started], count_job, &jobs[started]); started++) {
+        }
+        for (k = 0; k < started; k++)
+            JOIN(t[k]);
+        if (started + 1 < n)
+            return 0;
+    }
+    for (started = 0; started < n && SPAWN(t[started], parse_job, &jobs[started]); started++) {
+    }
+    for (k = 0; k < started; k++)
+        JOIN(t[k]);
+    *fields = *bytes = 0;
+    for (k = 0; k < started; k++) {
+        if (guess && !quill_guess_ok(r, k)) {
+            jobs[k].guess = 0;
+            parse_job(&jobs[k]);
+        }
+        *fields += jobs[k].fields;
+        *bytes += jobs[k].bytes;
+    }
+    return started == n;
 }
 
 static char *load(const char *path, size_t *len)
@@ -98,6 +201,18 @@ int main(int argc, char **argv)
                    strict ? "strict" : "lenient", (double)len * (double)iters / t / 1e9, t / (double)iters * 1e6,
                    fields, rc == QUILL_ERROR ? " error: " : "", rc == QUILL_ERROR ? p.err_msg : "");
         }
+    }
+    for (k = 1; k <= MAX_THREADS; k *= 2) {
+        size_t fields = 0, bytes = 0, iters = 0;
+        double t0 = now(), t;
+        do {
+            if (!parse_threaded(data, len, k, 1, &fields, &bytes)) {
+                fprintf(stderr, "cannot start %zu threads\n", k);
+                return 1;
+            }
+            iters++;
+        } while ((t = now() - t0) < secs);
+        printf("threads %zu %.4f GB/s %zu fields\n", k, (double)len * (double)iters / t / 1e9, fields);
     }
     free(data);
     free(tmp);

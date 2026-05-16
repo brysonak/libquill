@@ -3,6 +3,7 @@ set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 cc := "clang"
 py := if os_family() == "windows" { "python" } else { "python3" }
 exe := if os_family() == "windows" { ".exe" } else { "" }
+pthread := if os_family() == "windows" { "" } else { "-pthread" }
 mkdir := if os_family() == "windows" { "New-Item -ItemType Directory -Force build | Out-Null" } else { "mkdir -p build" }
 crt := if os_family() == "windows" { "-D_CRT_SECURE_NO_WARNINGS" } else { "" }
 warn := "-Wall -Wextra -Wpedantic -Werror -Iinclude " + crt
@@ -20,7 +21,7 @@ test:
 
 bench:
     {{mkdir}}
-    {{cc}} -std=c11 {{warn}} -O2 {{bflags}} tests/bench.c -o build/bench{{exe}}
+    {{cc}} -std=c11 {{warn}} -O2 {{bflags}} {{pthread}} tests/bench.c -o build/bench{{exe}}
     {{py}} tests/run.py bench build
 
 gen *args:
