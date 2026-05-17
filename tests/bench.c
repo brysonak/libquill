@@ -202,7 +202,7 @@ int main(int argc, char **argv)
                    fields, rc == QUILL_ERROR ? " error: " : "", rc == QUILL_ERROR ? p.err_msg : "");
         }
     }
-    for (k = 1; k <= MAX_THREADS; k *= 2) {
+    for (k = 1; len >= (1 << 20) && k <= MAX_THREADS; k *= 2) {
         size_t fields = 0, bytes = 0, iters = 0;
         double t0 = now(), t;
         do {
