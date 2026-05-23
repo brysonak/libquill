@@ -203,16 +203,20 @@ int main(int argc, char **argv)
         }
     }
     for (k = 1; len >= (1 << 20) && k <= MAX_THREADS; k *= 2) {
-        size_t fields = 0, bytes = 0, iters = 0;
-        double t0 = now(), t;
-        do {
-            if (!parse_threaded(data, len, k, 1, &fields, &bytes)) {
-                fprintf(stderr, "cannot start %zu threads\n", k);
-                return 1;
-            }
-            iters++;
-        } while ((t = now() - t0) < secs);
-        printf("threads %zu %.4f GB/s %zu fields\n", k, (double)len * (double)iters / t / 1e9, fields);
+        int guess;
+        for (guess = 1; guess >= 0; guess--) {
+            size_t fields = 0, bytes = 0, iters = 0;
+            double t0 = now(), t;
+            do {
+                if (!parse_threaded(data, len, k, guess, &fields, &bytes)) {
+                    fprintf(stderr, "cannot start %zu threads\n", k);
+                    return 1;
+                }
+                iters++;
+            } while ((t = now() - t0) < secs);
+            printf("%s %zu %.4f GB/s %zu fields\n", guess ? "threads" : "exact", k,
+                   (double)len * (double)iters / t / 1e9, fields);
+        }
     }
     free(data);
     free(tmp);
