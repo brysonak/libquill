@@ -566,10 +566,22 @@ static const struct {
 static int quill_i_level(void)
 {
 #ifdef QUILL_I_X64
+#if defined(__GNUC__) || defined(__clang__)
     static int cached;
-    if (!cached)
-        cached = quill_i_detect();
-    return cached;
+    int l = __atomic_load_n(&cached, __ATOMIC_RELAXED);
+    if (!l) {
+        l = quill_i_detect();
+        __atomic_store_n(&cached, l, __ATOMIC_RELAXED);
+    }
+#else
+    static volatile int cached;
+    int l = cached;
+    if (!l) {
+        l = quill_i_detect();
+        cached = l;
+    }
+#endif
+    return l;
 #elif defined(QUILL_I_NEON)
     return 1;
 #else
