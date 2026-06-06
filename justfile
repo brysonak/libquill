@@ -1,12 +1,14 @@
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 
 cc := "clang"
+cxx := "clang++"
 py := if os_family() == "windows" { "python" } else { "python3" }
 exe := if os_family() == "windows" { ".exe" } else { "" }
 pthread := if os_family() == "windows" { "" } else { "-pthread" }
 mkdir := if os_family() == "windows" { "New-Item -ItemType Directory -Force build | Out-Null" } else { "mkdir -p build" }
 crt := if os_family() == "windows" { "-D_CRT_SECURE_NO_WARNINGS" } else { "" }
 warn := "-Wall -Wextra -Wpedantic -Werror -Iinclude " + crt
+xwarn := warn + " -Wshadow -Wconversion -Wsign-conversion -Wcast-qual -Wold-style-cast -Wzero-as-null-pointer-constant"
 san := '-O1 -g "-fsanitize=address,undefined" -fno-sanitize-recover=all'
 bflags := ""
 
@@ -17,6 +19,8 @@ test:
     {{copy_asan}}
     {{cc}} -std=c99 {{warn}} {{san}} tests/differential.c -o build/differential{{exe}}
     {{cc}} -std=c99 {{warn}} {{san}} tests/dump.c -o build/dump{{exe}}
+    {{cxx}} -std=c++11 {{xwarn}} {{san}} tests/cxx.cpp -o build/cxx{{exe}}
+    ./build/cxx{{exe}}
     {{py}} tests/run.py test build
 
 bench:
@@ -34,4 +38,4 @@ fuzz secs="60":
     ./build/fuzz{{exe}} -max_total_time={{secs}} -artifact_prefix=build/
 
 fmt:
-    clang-format -i include/quill.h tests/bench.c tests/differential.c tests/dump.c
+    clang-format -i include/quill.h tests/bench.c tests/differential.c tests/dump.c tests/cxx.cpp
