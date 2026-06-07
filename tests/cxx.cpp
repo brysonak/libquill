@@ -1,6 +1,7 @@
 #define QUILL_IMPLEMENTATION
 #include "quill.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <memory>
 #include <string>
@@ -35,6 +36,30 @@ Rows whole(const std::string &csv)
     return rows;
 }
 
+Rows streamed(const std::string &csv, size_t step)
+{
+    auto p = std::unique_ptr<quill_parser>(new quill_parser);
+    std::string buf;
+    Rows rows;
+    quill_field f;
+    bool open = false;
+    size_t pos = 0;
+    int rc;
+    quill_init(p.get(), ',', 0);
+    for (;;) {
+        size_t take_n = std::min(step, csv.size() - pos);
+        buf.append(csv, pos, take_n);
+        pos += take_n;
+        quill_feed(p.get(), buf.data(), buf.size(), pos == csv.size());
+        while ((rc = quill_next(p.get(), &f)) == QUILL_FIELD)
+            take(rows, f, open);
+        if (rc != QUILL_MORE)
+            break;
+        buf.erase(0, quill_consumed(p.get()));
+    }
+    return rows;
+}
+
 } // namespace
 
 int main()
@@ -49,6 +74,12 @@ int main()
         || !want.back()[1].empty()) {
         std::fprintf(stderr, "whole parse wrong\n");
         return 1;
+    }
+    for (size_t step : {1u, 7u, 64u, 4096u}) {
+        if (streamed(csv, step) != want) {
+            std::fprintf(stderr, "streaming by %zu differs\n", step);
+            return 1;
+        }
     }
     std::printf("ok\n");
     return 0;
