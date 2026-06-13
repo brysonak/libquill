@@ -60,6 +60,38 @@ Rows streamed(const std::string &csv, size_t step)
     return rows;
 }
 
+Rows guessed(const std::string &csv, size_t n)
+{
+    std::vector<quill_range> ranges(n);
+    std::vector<Rows> parts(n);
+    for (size_t k = 0; k < n; k++) {
+        ranges[k].start = csv.size() / n * k;
+        ranges[k].end = k + 1 == n ? csv.size() : csv.size() / n * (k + 1);
+    }
+    for (size_t k = 0; k < n; k++) {
+        auto p = std::unique_ptr<quill_parser>(new quill_parser);
+        quill_field f;
+        bool open = false;
+        quill_init_guess(p.get(), ',', 0, csv.data(), csv.size(), ranges.data(), k);
+        while (quill_next(p.get(), &f) == QUILL_FIELD)
+            take(parts[k], f, open);
+    }
+    Rows rows;
+    for (size_t k = 0; k < n; k++) {
+        if (!quill_guess_ok(ranges.data(), k)) {
+            auto p = std::unique_ptr<quill_parser>(new quill_parser);
+            quill_field f;
+            bool open = false;
+            parts[k].clear();
+            quill_init_range(p.get(), ',', 0, csv.data(), csv.size(), ranges.data(), k);
+            while (quill_next(p.get(), &f) == QUILL_FIELD)
+                take(parts[k], f, open);
+        }
+        rows.insert(rows.end(), parts[k].begin(), parts[k].end());
+    }
+    return rows;
+}
+
 } // namespace
 
 int main()
@@ -78,6 +110,12 @@ int main()
     for (size_t step : {1u, 7u, 64u, 4096u}) {
         if (streamed(csv, step) != want) {
             std::fprintf(stderr, "streaming by %zu differs\n", step);
+            return 1;
+        }
+    }
+    for (size_t n : {1u, 3u, 16u, 200u}) {
+        if (guessed(csv, n) != want) {
+            std::fprintf(stderr, "%zu guessed ranges differ\n", n);
             return 1;
         }
     }
