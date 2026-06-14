@@ -20,7 +20,9 @@ test:
     {{cc}} -std=c99 {{warn}} {{san}} tests/differential.c -o build/differential{{exe}}
     {{cc}} -std=c99 {{warn}} {{san}} tests/dump.c -o build/dump{{exe}}
     {{cxx}} -std=c++11 {{xwarn}} {{san}} tests/cxx.cpp -o build/cxx{{exe}}
+    {{cxx}} -std=c++11 {{warn}} -Wno-missing-field-initializers {{san}} -x c++ tests/differential.c -o build/differential_cxx{{exe}}
     ./build/cxx{{exe}}
+    ./build/differential_cxx{{exe}}
     {{py}} tests/run.py test build
 
 bench:
