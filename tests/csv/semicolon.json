@@ -1,0 +1,14 @@
+{
+ "rows": [
+  [
+   "a",
+   "b,c"
+  ],
+  [
+   "d;e",
+   "f"
+  ]
+ ],
+ "strict_error": null,
+ "delim": ";"
+}

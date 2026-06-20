@@ -66,14 +66,16 @@ def python_rows(path, delim):
         return [row for row in csv.reader(f, delimiter=delim)]
 
 
-def delim_for(path):
+def delim_for(path, expected=None):
+    if expected and "delim" in expected:
+        return expected["delim"]
     return "\t" if path.endswith(".tsv") else ","
 
 
 def check_expected(build, kernels, path, failures):
     with open(path[:-4] + ".json", encoding="utf-8") as f:
         exp = json.load(f)
-    delim = delim_for(path)
+    delim = delim_for(path, exp)
     want = [[cell.encode("utf-8").decode("latin-1") for cell in row] for row in exp["rows"]]
     want_err = exp["strict_error"]
     for kernel in kernels:
