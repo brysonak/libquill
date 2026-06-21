@@ -1,0 +1,14 @@
+{
+ "rows": [
+  [
+   "a",
+   "b"
+  ],
+  [
+   "x\ty",
+   "z"
+  ]
+ ],
+ "strict_error": null,
+ "delim": "\t"
+}
