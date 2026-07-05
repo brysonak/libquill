@@ -14,7 +14,7 @@ extern "C" {
 #ifndef QUILL_I_CAP
 #define QUILL_I_CAP 4096
 #endif
-#define QUILL_I_BLOCKS (QUILL_I_CAP / 2)
+#define QUILL_I_BLOCKS (QUILL_I_CAP / 4)
 
 #ifdef __cplusplus
 #define QUILL_I_CAST(T, x) static_cast<T>(x)
