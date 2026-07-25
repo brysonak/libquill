@@ -119,7 +119,7 @@ QUILL_INLINE size_t quill_consumed(const quill_parser *p)
 /* Points into the input when nothing needs unescaping, else into dst */
 QUILL_INLINE const char *quill_value(const quill_field *f, char *dst, size_t *len)
 {
-    if (!f->quoted) {
+    if (!f->quoted || !memchr(f->ptr, '"', f->len)) {
         *len = f->len;
         return f->ptr;
     }
