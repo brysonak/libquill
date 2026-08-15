@@ -40,4 +40,7 @@ fuzz secs="60":
     ./build/fuzz{{exe}} -max_total_time={{secs}} -artifact_prefix=build/
 
 fmt:
-    clang-format -i include/quill.h tests/bench.c tests/differential.c tests/dump.c tests/cxx.cpp
+    clang-format -i include/quill.h benchmarks/quill/bench.c tests/bench.c tests/differential.c tests/dump.c tests/cxx.cpp
+
+compare *args:
+    {{py}} benchmarks/run.py {{args}}
