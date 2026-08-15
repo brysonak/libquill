@@ -30,8 +30,15 @@ def build_quill():
     return [exe]
 
 
+def build_python(name):
+    def build():
+        return [sys.executable, os.path.join(HERE, name, "bench.py")]
+    return build
+
+
 CONTENDERS = [
     ("quill", build_quill, [], "1 thread"),
+    ("python-csv", build_python("python-csv"), [], "stdlib csv"),
 ]
 
 
