@@ -9,6 +9,7 @@ ROOT = os.path.dirname(HERE)
 BUILD = os.path.join(ROOT, "build", "benchmarks")
 EXE = ".exe" if os.name == "nt" else ""
 CC = os.environ.get("CC", "clang")
+THREADS = os.cpu_count() or 1
 
 
 def sh(cmd, cwd=None, env=None):
@@ -25,7 +26,7 @@ def out(name):
 
 def build_quill():
     exe = out("quill")
-    sh([CC, "-std=c11", "-O2", "-I" + os.path.join(ROOT, "include"),
+    sh([CC, "-std=c11", "-O2", "-I" + os.path.join(ROOT, "include"), "-pthread",
         os.path.join(HERE, "quill", "bench.c"), "-o", exe])
     return [exe]
 
@@ -38,6 +39,7 @@ def build_python(name):
 
 CONTENDERS = [
     ("quill", build_quill, [], "1 thread"),
+    (f"quill -t {THREADS}", build_quill, ["-t", str(THREADS)], f"{THREADS} threads"),
     ("python-csv", build_python("python-csv"), [], "stdlib csv"),
 ]
 
@@ -63,10 +65,13 @@ def main():
     actions = a.actions.split(",")
     size = os.path.getsize(a.file)
 
-    picked = []
+    picked, built = [], {}
     for label, build, extra, note in CONTENDERS:
-        print(f"building {label}", file=sys.stderr)
-        picked.append((label, build() + extra, note))
+        base = label.split()[0]
+        if base not in built:
+            print(f"building {base}", file=sys.stderr)
+            built[base] = build()
+        picked.append((label, built[base] + extra, note))
 
     print(f"{os.path.basename(a.file)}: {size / 1e6:.0f} MB, best of 3, find {a.name!r}\n")
     for action in actions:

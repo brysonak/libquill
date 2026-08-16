@@ -3,18 +3,28 @@
 #include "quill.h"
 
 #include <fcntl.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
+typedef pthread_t thread;
+#define WORKER(name)      static void *name(void *arg)
+#define WORKER_END        return NULL
+#define SPAWN(t, fn, arg) (pthread_create(&(t), NULL, fn, arg) == 0)
+#define JOIN(t)           pthread_join(t, NULL)
+
+#define MAX_THREADS 256
+
 enum { COUNT, SCAN, FIND };
 
 typedef struct {
     const char *buf, *name;
-    size_t len, name_len;
-    int action;
+    size_t len, name_len, k;
+    quill_range *ranges;
+    int action, exact;
     unsigned long long rows, fields, bytes, matches;
 } job;
 
@@ -37,17 +47,25 @@ static const char *map_file(const char *path, size_t *len)
     return m == MAP_FAILED ? NULL : (const char *)m;
 }
 
-static void parse(job *j)
+WORKER(parse_range)
 {
+    job *j = (job *)arg;
     quill_parser *p = (quill_parser *)malloc(sizeof *p);
     char *tmp = NULL;
     size_t cap = 0;
     quill_field f;
     unsigned long long rows = 0, fields = 0, bytes = 0, matches = 0;
     if (!p)
-        return;
-    quill_init(p, ',', 0);
-    quill_feed(p, j->buf, j->len, 1);
+        WORKER_END;
+    if (j->ranges) {
+        if (j->exact)
+            quill_init_range(p, ',', 0, j->buf, j->len, j->ranges, j->k);
+        else
+            quill_init_guess(p, ',', 0, j->buf, j->len, j->ranges, j->k);
+    } else {
+        quill_init(p, ',', 0);
+        quill_feed(p, j->buf, j->len, 1);
+    }
     while (quill_next(p, &f) == QUILL_FIELD) {
         rows += (unsigned)f.eol;
         if (j->action == COUNT)
@@ -79,30 +97,66 @@ static void parse(job *j)
     j->matches = matches;
     free(tmp);
     free(p);
+    WORKER_END;
 }
 
 int main(int argc, char **argv)
 {
-    job j;
-    size_t len;
+    static job jobs[MAX_THREADS];
+    static quill_range ranges[MAX_THREADS];
+    thread t[MAX_THREADS];
+    int threads = 1, a = 1, action;
+    size_t len, k, n;
     const char *buf, *name = "";
-    int action = !strcmp(argv[1], "count") ? COUNT : !strcmp(argv[1], "scan") ? SCAN : FIND;
+    unsigned long long rows = 0, fields = 0, bytes = 0, matches = 0;
+    if (argc > 2 && !strcmp(argv[1], "-t")) {
+        threads = atoi(argv[2]);
+        threads = threads < 1 ? 1 : threads > MAX_THREADS ? MAX_THREADS : threads;
+        a = 3;
+    }
+    action = !strcmp(argv[a], "count") ? COUNT : !strcmp(argv[a], "scan") ? SCAN : FIND;
     if (action == FIND)
-        name = argc > 3 ? argv[3] : "";
-    if (!(buf = map_file(argv[2], &len)))
+        name = argc > a + 2 ? argv[a + 2] : "";
+    if (!(buf = map_file(argv[a + 1], &len)))
         return 1;
-    memset(&j, 0, sizeof j);
-    j.buf = buf;
-    j.len = len;
-    j.name = name;
-    j.name_len = strlen(name);
-    j.action = action;
-    parse(&j);
+    n = (size_t)threads;
+    for (k = 0; k < n; k++) {
+        jobs[k].buf = buf;
+        jobs[k].len = len;
+        jobs[k].name = name;
+        jobs[k].name_len = strlen(name);
+        jobs[k].action = action;
+        jobs[k].k = k;
+        jobs[k].ranges = n > 1 ? ranges : NULL;
+        ranges[k].start = len / n * k;
+        ranges[k].end = k + 1 == n ? len : len / n * (k + 1);
+    }
+    if (n == 1) {
+        parse_range(&jobs[0]);
+    } else {
+        for (k = 0; k < n; k++)
+            if (!SPAWN(t[k], parse_range, &jobs[k]))
+                return 1;
+        for (k = 0; k < n; k++)
+            JOIN(t[k]);
+        for (k = 0; k < n; k++) {
+            if (!quill_guess_ok(ranges, k)) {
+                jobs[k].exact = 1;
+                parse_range(&jobs[k]);
+            }
+        }
+    }
+    for (k = 0; k < n; k++) {
+        rows += jobs[k].rows;
+        fields += jobs[k].fields;
+        bytes += jobs[k].bytes;
+        matches += jobs[k].matches;
+    }
     if (action == COUNT)
-        printf("rows %llu\n", j.rows);
+        printf("rows %llu\n", rows);
     else if (action == SCAN)
-        printf("rows %llu fields %llu bytes %llu\n", j.rows, j.fields, j.bytes);
+        printf("rows %llu fields %llu bytes %llu\n", rows, fields, bytes);
     else
-        printf("matches %llu\n", j.matches);
+        printf("matches %llu\n", matches);
     return 0;
 }
