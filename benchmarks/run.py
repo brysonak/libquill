@@ -91,6 +91,7 @@ CONTENDERS = [
     ("quill", build_quill, [], "1 thread"),
     (f"quill -t {THREADS}", build_quill, ["-t", str(THREADS)], f"{THREADS} threads"),
     ("zsv", build_zsv, [], "default engine"),
+    ("zsv -f", build_zsv, ["-f"], "SIMD engine, scan_engine=3"),
     ("python-csv", build_python("python-csv"), [], "stdlib csv"),
 ]
 
