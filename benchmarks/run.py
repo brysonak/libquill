@@ -14,7 +14,7 @@ EXE = ".exe" if os.name == "nt" else ""
 CC = os.environ.get("CC", "clang")
 THREADS = os.cpu_count() or 1
 
-ZSV = "https://github.com/liquidaty/zsv.git"
+ZSV = ("https://github.com/liquidaty/zsv.git", "2e2181930f68b6b83da69eb19d24636393d15408")
 
 
 class Skip(Exception):
@@ -34,7 +34,7 @@ def need(tool):
         raise Skip(f"{tool} not found")
 
 
-def fetch(name, url):
+def fetch(name, url, sha):
     dst = os.path.join(DEPS, name)
     if os.path.exists(os.path.join(dst, ".done")):
         return dst
@@ -42,7 +42,7 @@ def fetch(name, url):
     shutil.rmtree(dst, ignore_errors=True)
     os.makedirs(dst)
     sh(["git", "init", "-q"], dst)
-    sh(["git", "fetch", "-q", "--depth", "1", url], dst)
+    sh(["git", "fetch", "-q", "--depth", "1", url, sha], dst)
     sh(["git", "checkout", "-q", "FETCH_HEAD"], dst)
     return dst
 
@@ -67,7 +67,7 @@ def build_quill():
 def build_zsv():
     need(CC)
     need("make")
-    src = fetch("zsv", ZSV)
+    src = fetch("zsv", *ZSV)
     if not os.path.exists(os.path.join(src, ".done")):
         env = dict(os.environ, CC=CC)
         sh(["sh", "./configure"], src, env)
