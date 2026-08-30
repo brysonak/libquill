@@ -110,6 +110,7 @@ def run(cmd, runs):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("-r", dest="runs", type=int, default=3)
     ap.add_argument("-a", dest="actions", default="count,scan,find")
     ap.add_argument("-n", dest="name", default="Debbie")
     ap.add_argument("-f", dest="file", default=os.path.join(HERE, "big.csv"))
@@ -130,13 +131,13 @@ def main():
         if built[base]:
             picked.append((label, built[base] + extra, note))
 
-    print(f"{os.path.basename(a.file)}: {size / 1e6:.0f} MB, best of 3, find {a.name!r}\n")
+    print(f"{os.path.basename(a.file)}: {size / 1e6:.0f} MB, best of {a.runs}, find {a.name!r}\n")
     for action in actions:
         args = [action, a.file] + ([a.name] if action == "find" else [])
         results = []
         for label, cmd, note in picked:
             print(f"  {action} {label}", file=sys.stderr)
-            secs, text = run(cmd + args, 3)
+            secs, text = run(cmd + args, a.runs)
             results.append((label, note, secs, text))
         print(f"{action}:")
         fastest = min((r[2] for r in results if r[2]), default=None)
