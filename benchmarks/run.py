@@ -15,6 +15,7 @@ CC = os.environ.get("CC", "clang")
 THREADS = os.cpu_count() or 1
 
 ZSV = ("https://github.com/liquidaty/zsv.git", "2e2181930f68b6b83da69eb19d24636393d15408")
+CISV = ("https://github.com/sanix-darker/cisv.git", "0d55b40918ab9c57f0b0c225161854ccdfe2fd9f")
 
 
 class Skip(Exception):
@@ -81,6 +82,17 @@ def build_zsv():
     return [exe]
 
 
+def build_cisv():
+    need(CC)
+    src = fetch("cisv", *CISV)
+    done(src)
+    exe = out("cisv")
+    sh([CC, "-O3", "-march=native", "-D_GNU_SOURCE", "-I" + os.path.join(src, "core", "include"),
+        os.path.join(HERE, "cisv", "bench.c"), os.path.join(src, "core", "src", "parser.c"),
+        "-lpthread", "-o", exe])
+    return [exe]
+
+
 def build_python(name):
     def build():
         return [sys.executable, os.path.join(HERE, name, "bench.py")]
@@ -92,6 +104,7 @@ CONTENDERS = [
     (f"quill -t {THREADS}", build_quill, ["-t", str(THREADS)], f"{THREADS} threads"),
     ("zsv", build_zsv, [], "default engine"),
     ("zsv -f", build_zsv, ["-f"], "SIMD engine, scan_engine=3"),
+    ("cisv", build_cisv, [], "-march=native"),
     ("python-csv", build_python("python-csv"), [], "stdlib csv"),
 ]
 
