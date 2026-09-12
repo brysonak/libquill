@@ -1,0 +1,16 @@
+[package]
+name = "rust-csv-bench"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "bench"
+path = "src/main.rs"
+
+[dependencies]
+csv = "1"
+
+[profile.release]
+lto = true
+codegen-units = 1

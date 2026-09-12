@@ -93,6 +93,15 @@ def build_cisv():
     return [exe]
 
 
+def build_cargo(name):
+    def build():
+        need("cargo")
+        d = os.path.join(HERE, name)
+        sh(["cargo", "build", "--release", "-q"], d)
+        return [os.path.join(d, "target", "release", "bench" + EXE)]
+    return build
+
+
 def build_python(name):
     def build():
         return [sys.executable, os.path.join(HERE, name, "bench.py")]
@@ -105,6 +114,7 @@ CONTENDERS = [
     ("zsv", build_zsv, [], "default engine"),
     ("zsv -f", build_zsv, ["-f"], "SIMD engine, scan_engine=3"),
     ("cisv", build_cisv, [], "-march=native"),
+    ("rust-csv", build_cargo("rust-csv"), [], "Rust csv crate"),
     ("python-csv", build_python("python-csv"), [], "stdlib csv"),
 ]
 

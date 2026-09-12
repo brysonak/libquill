@@ -2,3 +2,4 @@ build/
 tests/csv/gen_*
 benchmarks/big.csv
 benchmarks/.deps/
+benchmarks/*/target/
