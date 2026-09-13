@@ -114,6 +114,7 @@ CONTENDERS = [
     ("zsv", build_zsv, [], "default engine"),
     ("zsv -f", build_zsv, ["-f"], "SIMD engine, scan_engine=3"),
     ("cisv", build_cisv, [], "-march=native"),
+    ("simd-csv", build_cargo("simd-csv"), [], "Rust"),
     ("rust-csv", build_cargo("rust-csv"), [], "Rust csv crate"),
     ("python-csv", build_python("python-csv"), [], "stdlib csv"),
 ]
