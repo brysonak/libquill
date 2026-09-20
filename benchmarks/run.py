@@ -102,8 +102,12 @@ def build_cargo(name):
     return build
 
 
-def build_python(name):
+def build_python(name, module=None):
     def build():
+        if module:
+            r = subprocess.run([sys.executable, "-c", f"import {module}"], capture_output=True)
+            if r.returncode:
+                raise Skip(f"pip install {module}")
         return [sys.executable, os.path.join(HERE, name, "bench.py")]
     return build
 
@@ -116,6 +120,7 @@ CONTENDERS = [
     ("cisv", build_cisv, [], "-march=native"),
     ("simd-csv", build_cargo("simd-csv"), [], "Rust"),
     ("rust-csv", build_cargo("rust-csv"), [], "Rust csv crate"),
+    ("pandas", build_python("pandas", "pandas"), [], "C engine"),
     ("python-csv", build_python("python-csv"), [], "stdlib csv"),
 ]
 
