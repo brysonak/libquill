@@ -121,6 +121,7 @@ CONTENDERS = [
     ("simd-csv", build_cargo("simd-csv"), [], "Rust"),
     ("rust-csv", build_cargo("rust-csv"), [], "Rust csv crate"),
     ("polars", build_python("polars", "polars"), [], "multithreaded"),
+    ("duckdb", build_python("duckdb", "duckdb"), [], "multithreaded"),
     ("pandas", build_python("pandas", "pandas"), [], "C engine"),
     ("python-csv", build_python("python-csv"), [], "stdlib csv"),
 ]
