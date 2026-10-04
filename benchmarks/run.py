@@ -144,14 +144,18 @@ def main():
     ap.add_argument("-r", dest="runs", type=int, default=3)
     ap.add_argument("-a", dest="actions", default="count,scan,find")
     ap.add_argument("-n", dest="name", default="Debbie")
+    ap.add_argument("-o", dest="only", default="")
     ap.add_argument("-f", dest="file", default=os.path.join(HERE, "big.csv"))
     a = ap.parse_args()
+    only = {s for s in a.only.split(",") if s}
     actions = a.actions.split(",")
     size = os.path.getsize(a.file)
 
     picked, built, skipped = [], {}, []
     for label, build, extra, note in CONTENDERS:
         base = label.split()[0]
+        if only and base not in only and label not in only:
+            continue
         if base not in built:
             print(f"building {base}", file=sys.stderr)
             try:
