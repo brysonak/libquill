@@ -169,19 +169,22 @@ def main():
     print(f"{os.path.basename(a.file)}: {size / 1e6:.0f} MB, best of {a.runs}, find {a.name!r}\n")
     for action in actions:
         args = [action, a.file] + ([a.name] if action == "find" else [])
-        results = []
+        results, truth = [], None
         for label, cmd, note in picked:
             print(f"  {action} {label}", file=sys.stderr)
             secs, text = run(cmd + args, a.runs)
+            if truth is None and label == "quill":
+                truth = text
             results.append((label, note, secs, text))
-        print(f"{action}:")
+        print(f"{action}: {truth}")
         fastest = min((r[2] for r in results if r[2]), default=None)
         for label, note, secs, text in sorted(results, key=lambda r: r[2] or float("inf")):
             if secs is None:
                 print(f"  {label:<16} failed: {text}")
                 continue
+            flag = "" if text == truth else f"   WRONG: {text}"
             print(f"  {label:<16} {secs * 1e3:9.0f} ms {size / secs / 1e9:6.2f} GB/s"
-                  f" {secs / fastest:6.1f}x  {note}  {text}")
+                  f" {secs / fastest:6.1f}x  {note}{flag}")
         print()
     for base, why in skipped:
         print(f"skipped {base}: {why}")
