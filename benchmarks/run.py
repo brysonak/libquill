@@ -60,7 +60,8 @@ def out(name):
 def build_quill():
     need(CC)
     exe = out("quill")
-    sh([CC, "-std=c11", "-O2", "-I" + os.path.join(ROOT, "include"), "-pthread",
+    flags = [] if os.name == "nt" else ["-pthread"]
+    sh([CC, "-std=c11", "-O2", "-I" + os.path.join(ROOT, "include"), *flags,
         os.path.join(HERE, "quill", "bench.c"), "-o", exe])
     return [exe]
 

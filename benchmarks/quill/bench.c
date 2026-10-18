@@ -1,20 +1,33 @@
+#ifndef _WIN32
 #define _GNU_SOURCE
+#endif
 #define QUILL_IMPLEMENTATION
 #include "quill.h"
 
-#include <fcntl.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <threads.h>
+#include <windows.h>
+typedef thrd_t thread;
+#define WORKER(name)      static int name(void *arg)
+#define WORKER_END        return 0
+#define SPAWN(t, fn, arg) (thrd_create(&(t), fn, arg) == thrd_success)
+#define JOIN(t)           thrd_join(t, NULL)
+#else
+#include <fcntl.h>
+#include <pthread.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
 typedef pthread_t thread;
 #define WORKER(name)      static void *name(void *arg)
 #define WORKER_END        return NULL
 #define SPAWN(t, fn, arg) (pthread_create(&(t), NULL, fn, arg) == 0)
 #define JOIN(t)           pthread_join(t, NULL)
+#endif
 
 #define MAX_THREADS 256
 
@@ -30,6 +43,17 @@ typedef struct {
 
 static const char *map_file(const char *path, size_t *len)
 {
+#ifdef _WIN32
+    LARGE_INTEGER size;
+    HANDLE f = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL), m;
+    if (f == INVALID_HANDLE_VALUE || !GetFileSizeEx(f, &size))
+        return NULL;
+    *len = (size_t)size.QuadPart;
+    if (!*len)
+        return "";
+    m = CreateFileMappingA(f, NULL, PAGE_READONLY, 0, 0, NULL);
+    return m ? (const char *)MapViewOfFile(m, FILE_MAP_READ, 0, 0, 0) : NULL;
+#else
     struct stat st;
     int fd = open(path, O_RDONLY);
     void *m;
@@ -45,6 +69,7 @@ static const char *map_file(const char *path, size_t *len)
 #endif
     close(fd);
     return m == MAP_FAILED ? NULL : (const char *)m;
+#endif
 }
 
 WORKER(parse_range)
