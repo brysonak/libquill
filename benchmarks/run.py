@@ -148,6 +148,8 @@ def main():
     ap.add_argument("-o", dest="only", default="")
     ap.add_argument("-f", dest="file", default=os.path.join(HERE, "big.csv"))
     a = ap.parse_args()
+    if not os.path.exists(a.file):
+        sys.exit(f"{a.file} not found, drop big.csv into benchmarks/ or pass -f")
     only = {s for s in a.only.split(",") if s}
     actions = a.actions.split(",")
     size = os.path.getsize(a.file)
