@@ -1,5 +1,9 @@
 /* quill, a fast CSV parser */
 
+/*
+  Dear Ellie,
+  I will never name my variables anything besides single letters. I hope you can forgive me
+*/
 #ifndef QUILL_H
 #define QUILL_H
 
