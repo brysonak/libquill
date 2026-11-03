@@ -163,6 +163,13 @@ QUILL_INLINE const char *quill_value(const quill_field *f, char *dst, size_t *le
 #define QUILL_I_TARGET(x)
 #endif
 
+/* MSVC headers define NULL as 0 in C++, which trips -Wzero-as-null-pointer-constant */
+#if defined(__cplusplus) && (__cplusplus >= 201103L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201103L))
+#define QUILL_I_NULL nullptr
+#else
+#define QUILL_I_NULL NULL
+#endif
+
 QUILL_I_INLINE unsigned quill_i_popcount(uint64_t x)
 {
 #if defined(__GNUC__) || defined(__clang__)
@@ -806,7 +813,7 @@ static int quill_i_guess(const char *buf, size_t len, size_t start, unsigned cha
 {
     const char *s = buf + start, *lim = buf + (len - start > 65536 ? start + 65536 : len), *q;
     int parity = 0;
-    while ((q = QUILL_I_CAST(const char *, memchr(s, '"', QUILL_I_CAST(size_t, lim - s)))) != NULL) {
+    while ((q = QUILL_I_CAST(const char *, memchr(s, '"', QUILL_I_CAST(size_t, lim - s)))) != QUILL_I_NULL) {
         unsigned char next = q + 1 < buf + len ? QUILL_I_CAST(unsigned char, q[1]) : '\n';
         unsigned char prev = QUILL_I_CAST(unsigned char, q[-1]);
         if (next != '"' && next != delim && next != '\n' && next != '\r')
@@ -846,7 +853,7 @@ static void quill_i_finish_guess(quill_parser *p)
     quill_range *r = p->guessed, tail;
     size_t data = quill_i_data_start(p->buf, QUILL_I_CAST(size_t, p->end - p->buf));
     size_t end = r->end < data ? data : r->end, scan = QUILL_I_CAST(size_t, p->scan - p->buf);
-    p->guessed = NULL;
+    p->guessed = QUILL_I_NULL;
     if (r->start == r->end)
         return;
     tail.start = end;
@@ -868,7 +875,7 @@ const char *quill_i_unescape(const quill_field *f, char *dst, size_t *len)
     const char *s = f->ptr, *e = f->ptr + f->len, *q;
     char *d = dst;
     int in = 1;
-    while ((q = QUILL_I_CAST(const char *, memchr(s, '"', QUILL_I_CAST(size_t, e - s)))) != NULL) {
+    while ((q = QUILL_I_CAST(const char *, memchr(s, '"', QUILL_I_CAST(size_t, e - s)))) != QUILL_I_NULL) {
         memcpy(d, s, QUILL_I_CAST(size_t, q - s));
         d += q - s;
         if (in && q + 1 < e && q[1] == '"') {

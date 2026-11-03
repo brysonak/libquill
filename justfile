@@ -7,6 +7,7 @@ exe := if os_family() == "windows" { ".exe" } else { "" }
 pthread := if os_family() == "windows" { "" } else { "-pthread" }
 mkdir := if os_family() == "windows" { "New-Item -ItemType Directory -Force build | Out-Null" } else { "mkdir -p build" }
 crt := if os_family() == "windows" { "-D_CRT_SECURE_NO_WARNINGS" } else { "" }
+cxxstd := if os_family() == "windows" { "c++14" } else { "c++11" }
 warn := "-Wall -Wextra -Wpedantic -Werror -Iinclude " + crt
 xwarn := warn + " -Wshadow -Wconversion -Wsign-conversion -Wcast-qual -Wold-style-cast -Wzero-as-null-pointer-constant"
 san := '-O1 -g "-fsanitize=address,undefined" -fno-sanitize-recover=all'
@@ -19,8 +20,8 @@ test:
     {{copy_asan}}
     {{cc}} -std=c99 {{warn}} {{san}} tests/differential.c -o build/differential{{exe}}
     {{cc}} -std=c99 {{warn}} {{san}} tests/dump.c -o build/dump{{exe}}
-    {{cxx}} -std=c++11 {{xwarn}} {{san}} tests/cxx.cpp -o build/cxx{{exe}}
-    {{cxx}} -std=c++11 {{warn}} -Wno-missing-field-initializers {{san}} -x c++ tests/differential.c -o build/differential_cxx{{exe}}
+    {{cxx}} -std={{cxxstd}} {{xwarn}} {{san}} tests/cxx.cpp -o build/cxx{{exe}}
+    {{cxx}} -std={{cxxstd}} {{warn}} -Wno-missing-field-initializers {{san}} -x c++ tests/differential.c -o build/differential_cxx{{exe}}
     ./build/cxx{{exe}}
     ./build/differential_cxx{{exe}}
     {{py}} tests/run.py test build
