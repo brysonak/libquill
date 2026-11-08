@@ -62,11 +62,7 @@ static const char *map_file(const char *path, size_t *len)
     *len = (size_t)st.st_size;
     if (!*len)
         return "";
-#ifdef MAP_POPULATE
-    m = mmap(NULL, *len, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0);
-#else
     m = mmap(NULL, *len, PROT_READ, MAP_PRIVATE, fd, 0);
-#endif
     close(fd);
     return m == MAP_FAILED ? NULL : (const char *)m;
 #endif
