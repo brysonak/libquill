@@ -1,6 +1,6 @@
 build/
 tests/csv/gen_*
-benchmarks/big.csv
+benchmarks/*.csv
 benchmarks/.deps/
 benchmarks/*/target/
 benchmarks/venv/
