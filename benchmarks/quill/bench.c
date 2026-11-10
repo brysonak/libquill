@@ -71,12 +71,17 @@ static const char *map_file(const char *path, size_t *len)
 WORKER(parse_range)
 {
     job *j = (job *)arg;
-    quill_parser *p = (quill_parser *)malloc(sizeof *p);
+    quill_parser *p;
     char *tmp = NULL;
     size_t cap = 0;
     quill_field f;
     unsigned long long rows = 0, fields = 0, bytes = 0, matches = 0;
-    if (!p)
+    if (j->action == COUNT) {
+        if (j->ranges)
+            quill_count(j->buf, &j->ranges[j->k]);
+        WORKER_END;
+    }
+    if (!(p = (quill_parser *)malloc(sizeof *p)))
         WORKER_END;
     if (j->ranges) {
         if (j->exact)
@@ -160,12 +165,14 @@ int main(int argc, char **argv)
                 return 1;
         for (k = 0; k < n; k++)
             JOIN(t[k]);
-        for (k = 0; k < n; k++) {
-            if (!quill_guess_ok(ranges, k)) {
-                jobs[k].exact = 1;
-                parse_range(&jobs[k]);
-            }
-        }
+        for (k = 0; k < n && action != COUNT; k++)
+            jobs[k].exact = !quill_guess_ok(ranges, k);
+        for (k = 0; k < n; k++)
+            if (jobs[k].exact && !SPAWN(t[k], parse_range, &jobs[k]))
+                return 1;
+        for (k = 0; k < n; k++)
+            if (jobs[k].exact)
+                JOIN(t[k]);
     }
     for (k = 0; k < n; k++) {
         rows += jobs[k].rows;
@@ -174,7 +181,7 @@ int main(int argc, char **argv)
         matches += jobs[k].matches;
     }
     if (action == COUNT)
-        printf("rows %llu\n", rows);
+        printf("rows %llu\n", (unsigned long long)quill_count_rows(buf, len, n > 1 ? ranges : NULL, n > 1 ? n : 0));
     else if (action == SCAN)
         printf("rows %llu fields %llu bytes %llu\n", rows, fields, bytes);
     else

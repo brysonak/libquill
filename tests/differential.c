@@ -258,12 +258,45 @@ static void parse(quill_i_run_fn run, const unsigned char *s, size_t len, char d
     }
 }
 
+static uint64_t rows_of(const result *r)
+{
+    uint64_t rows = 0;
+    size_t at = 0, n;
+    while (at < r->n) {
+        memcpy(&n, r->b + at, sizeof n);
+        at += sizeof n + n;
+        rows += r->b[at++];
+    }
+    return rows;
+}
+
+static void check_rows(const unsigned char *s, size_t len, uint64_t want)
+{
+    quill_range rg[8];
+    size_t n = 1 + (size_t)(next_rand() % 8), k, cut = 0;
+    quill_i_count_fn count = quill_i_kernels[next_rand() % (size_t)(quill_i_best() + 1)].count;
+    for (k = 0; k < n; k++) {
+        rg[k].start = cut;
+        cut = k + 1 == n ? len : cut + (size_t)(next_rand() % (len / n * 2 + 1));
+        rg[k].end = cut > len ? len : cut;
+        cut = rg[k].end;
+        quill_i_count(count, (const char *)s, &rg[k]);
+    }
+    if (quill_count_rows((const char *)s, len, QUILL_I_NULL, 0) != want
+        || quill_count_rows((const char *)s, len, rg, n) != want) {
+        fprintf(stderr, "row count mismatch: len %zu ranges %zu want %llu\n", len, n, (unsigned long long)want);
+        abort();
+    }
+}
+
 static void check(const unsigned char *s, size_t len, char delim, int strict)
 {
     result want = {0};
     size_t k, levels = sizeof quill_i_kernels / sizeof quill_i_kernels[0];
     static const size_t chunks[] = {0, 1, 7, 64, 200, 5000, (size_t)-1, (size_t)-1, (size_t)-1};
     oracle(s, len, (unsigned char)delim, strict, &want);
+    if (!strict)
+        check_rows(s, len, rows_of(&want));
     for (k = 0; k < levels && quill_i_kernels[k].level <= quill_i_level(); k++) {
         size_t c;
         for (c = 0; c < sizeof chunks / sizeof chunks[0]; c++) {
@@ -373,11 +406,11 @@ int main(void)
     assert(quill_init(&P, '"', 0) < 0 && quill_init(&P, '\n', 0) < 0 && quill_init(&P, '\r', 0) < 0);
     assert(quill_init(&P, 0, 0) < 0);
     {
-        quill_range g = {0, 3, 0, 0, 0};
+        quill_range g = {0, 3, 0, 0, 0, 0};
         assert(quill_init_guess(&P, ',', QUILL_STRICT, "abc", 3, &g, 0) < 0);
     }
     {
-        quill_range bad = {2, 1, 0, 0, 0};
+        quill_range bad = {2, 1, 0, 0, 0, 0};
         assert(quill_init_range(&P, ',', 0, "abc", 3, &bad, 0) < 0);
         bad.start = 0;
         bad.end = 4;

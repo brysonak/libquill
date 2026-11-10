@@ -211,12 +211,14 @@ int main(int argc, char **argv)
                     if (quill_init_guess(&p, delim, 0, buf, len, rg, r))
                         return usage();
                     p.run = quill_i_kernels[k].run;
+                    while (quill_next(&p, &f) == QUILL_FIELD) {
+                    }
                     if (quill_guess_ok(rg, r)) {
+                        quill_init_guess(&p, delim, 0, buf, len, rg, r);
+                        p.run = quill_i_kernels[k].run;
                         while ((rc = quill_next(&p, &f)) == QUILL_FIELD)
                             emit(&f);
                         continue;
-                    }
-                    while (quill_next(&p, &f) == QUILL_FIELD) {
                     }
                 }
                 if (quill_init_range(&p, delim, strict, buf, len, rg, r))

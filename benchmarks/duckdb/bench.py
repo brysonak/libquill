@@ -4,7 +4,7 @@ import duckdb
 
 action, path = sys.argv[1], sys.argv[2]
 name = sys.argv[3] if len(sys.argv) > 3 else ""
-src = "read_csv($path, header = false, all_varchar = true, quote = '\"', escape = '\"')"
+src = "read_csv($path, header = false, all_varchar = true, delim = ',', quote = '\"', escape = '\"', strict_mode = false)"
 db = duckdb.connect()
 if action == "count":
     print(f"rows {db.execute(f'SELECT count(*) FROM {src}', dict(path=path)).fetchone()[0]}")
@@ -17,3 +17,4 @@ if action == "scan":
 else:
     expr = " + ".join(f'count_if("{c}" = $name)' for c in cols)
     print(f"matches {db.execute(f'SELECT {expr} FROM {src}', dict(path=path, name=name)).fetchone()[0]}")
+    

@@ -48,14 +48,14 @@ typedef struct {
     size_t start, end; /* set by the caller */
     int odd_quotes;
     int guess;
-    uint64_t newlines;
+    uint64_t newlines, rows;
 } quill_range;
 
 typedef struct {
     uint64_t inq, sep, close, cr;
     uint64_t lines, nl_mask, nl_at, gbase, err_at;
     const char *err;
-    int strict;
+    int strict, guard;
 } quill_i_state;
 
 typedef struct quill_parser {
@@ -82,6 +82,7 @@ int quill_init_range(quill_parser *p, char delim, int flags, const char *buf, si
 int quill_init_guess(quill_parser *p, char delim, int flags, const char *buf, size_t len, quill_range *ranges,
                      size_t k);
 int quill_guess_ok(const quill_range *ranges, size_t k);
+uint64_t quill_count_rows(const char *buf, size_t len, const quill_range *ranges, size_t n);
 int quill_i_next_slow(quill_parser *p, quill_field *f);
 const char *quill_i_unescape(const quill_field *f, char *dst, size_t *len);
 
@@ -237,6 +238,18 @@ QUILL_I_INLINE void quill_i_flatten(uint32_t **out, uint32_t off, uint64_t s)
     *out = o + cnt;
 }
 
+typedef struct {
+    uint64_t inq, lines, rows;
+} quill_i_tally;
+
+QUILL_I_INLINE void quill_i_tally_block(quill_i_tally *t, uint64_t pq, uint64_t n)
+{
+    pq ^= t->inq;
+    t->inq = 0 - (pq >> 63);
+    t->rows += quill_i_popcount(n & ~pq);
+    t->lines += quill_i_popcount(n);
+}
+
 QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off, uint64_t q, uint64_t pq, uint64_t d,
                                  uint64_t n, uint64_t r, uint64_t valid)
 {
@@ -267,6 +280,16 @@ QUILL_I_INLINE int quill_i_block(quill_i_state *t, uint32_t **out, uint32_t off,
         if (n) {
             t->nl_mask = n;
             t->nl_at = t->gbase + off;
+        }
+    } else if (t->guard) {
+        uint64_t close = q & ~pq, pclose = close << 1 | t->close;
+        uint64_t bad = q & pq & ~(s << 1 | t->sep | pclose) & valid;
+        t->sep = s >> 63;
+        t->close = close >> 63;
+        if (bad) {
+            s &= (bad & (0 - bad)) - 1;
+            t->err_at = t->gbase + off + quill_i_ctz(bad);
+            t->err = "quote inside unquoted field";
         }
     }
     quill_i_flatten(out, off, s);
@@ -351,17 +374,18 @@ static size_t quill_i_run_sse2(quill_parser *p, const unsigned char *s, size_t n
     return p->sparse && !p->st.strict ? quill_i_sse2(p, s, nb, off, valid, 1) : quill_i_sse2(p, s, nb, off, valid, 0);
 }
 
-static void quill_i_count_sse2(const unsigned char *s, size_t nb, uint64_t *quotes, uint64_t *lines)
+static void quill_i_count_sse2(const unsigned char *s, size_t nb, quill_i_tally *t)
 {
     const __m128i Q = _mm_set1_epi8('"'), N = _mm_set1_epi8('\n');
     for (; nb; nb--, s += 64) {
         __m128i v[4];
+        uint64_t q;
         v[0] = _mm_loadu_si128(QUILL_I_PTR(const __m128i *, s));
         v[1] = _mm_loadu_si128(QUILL_I_PTR(const __m128i *, s + 16));
         v[2] = _mm_loadu_si128(QUILL_I_PTR(const __m128i *, s + 32));
         v[3] = _mm_loadu_si128(QUILL_I_PTR(const __m128i *, s + 48));
-        *quotes ^= quill_i_mask_sse2(v, Q);
-        *lines += quill_i_popcount(quill_i_mask_sse2(v, N));
+        q = quill_i_mask_sse2(v, Q);
+        quill_i_tally_block(t, q ? quill_i_pxor(q) : 0, quill_i_mask_sse2(v, N));
     }
 }
 
@@ -421,15 +445,15 @@ static size_t quill_i_run_avx2(quill_parser *p, const unsigned char *s, size_t n
     return p->sparse && !p->st.strict ? quill_i_avx2(p, s, nb, off, valid, 1) : quill_i_avx2(p, s, nb, off, valid, 0);
 }
 
-QUILL_I_TARGET("avx2,popcnt")
-static void quill_i_count_avx2(const unsigned char *s, size_t nb, uint64_t *quotes, uint64_t *lines)
+QUILL_I_TARGET("avx2,popcnt,pclmul")
+static void quill_i_count_avx2(const unsigned char *s, size_t nb, quill_i_tally *t)
 {
     const __m256i Q = _mm256_set1_epi8('"'), N = _mm256_set1_epi8('\n');
     for (; nb; nb--, s += 64) {
         __m256i a = _mm256_loadu_si256(QUILL_I_PTR(const __m256i *, s));
         __m256i b = _mm256_loadu_si256(QUILL_I_PTR(const __m256i *, s + 32));
-        *quotes ^= quill_i_mask_avx2(a, b, Q);
-        *lines += quill_i_popcount(quill_i_mask_avx2(a, b, N));
+        uint64_t q = quill_i_mask_avx2(a, b, Q);
+        quill_i_tally_block(t, q ? quill_i_clmul(q) : 0, quill_i_mask_avx2(a, b, N));
     }
 }
 
@@ -531,7 +555,7 @@ static size_t quill_i_run_neon(quill_parser *p, const unsigned char *s, size_t n
     return p->sparse && !p->st.strict ? quill_i_neon(p, s, nb, off, valid, 1) : quill_i_neon(p, s, nb, off, valid, 0);
 }
 
-static void quill_i_count_neon(const unsigned char *s, size_t nb, uint64_t *quotes, uint64_t *lines)
+static void quill_i_count_neon(const unsigned char *s, size_t nb, quill_i_tally *t)
 {
     static const unsigned char weights[16] = {1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128};
     const uint8x16_t W = vld1q_u8(weights), Q = vdupq_n_u8('"'), N = vdupq_n_u8('\n');
@@ -541,31 +565,37 @@ static void quill_i_count_neon(const unsigned char *s, size_t nb, uint64_t *quot
         v[1] = vld1q_u8(s + 16);
         v[2] = vld1q_u8(s + 32);
         v[3] = vld1q_u8(s + 48);
-        *quotes ^= quill_i_mask_neon(v, Q, W);
-        *lines += quill_i_popcount(quill_i_mask_neon(v, N, W));
+        uint64_t q = quill_i_mask_neon(v, Q, W);
+#if defined(__ARM_FEATURE_AES) || defined(__ARM_FEATURE_CRYPTO)
+        uint64_t pq = q ? vgetq_lane_u64(vreinterpretq_u64_p128(vmull_p64(q, ~0ULL)), 0) : 0;
+#else
+        uint64_t pq = q ? quill_i_pxor(q) : 0;
+#endif
+        quill_i_tally_block(t, pq, quill_i_mask_neon(v, N, W));
     }
 }
 #endif
 
-static void quill_i_count_bytes(const unsigned char *s, size_t n, uint64_t *quotes, uint64_t *lines)
+static void quill_i_count_bytes(const unsigned char *s, size_t n, quill_i_tally *t)
 {
     const unsigned char *e = s + n;
-    uint64_t q = 0, l = 0;
     for (; s < e; s++) {
-        q ^= *s == '"';
-        l += *s == '\n';
+        if (*s == '"') {
+            t->inq = ~t->inq;
+        } else if (*s == '\n') {
+            t->lines++;
+            t->rows += QUILL_I_CAST(uint64_t, !t->inq);
+        }
     }
-    *quotes ^= q;
-    *lines += l;
 }
 
-static void quill_i_count_scalar(const unsigned char *s, size_t nb, uint64_t *quotes, uint64_t *lines)
+static void quill_i_count_scalar(const unsigned char *s, size_t nb, quill_i_tally *t)
 {
-    quill_i_count_bytes(s, 64 * nb, quotes, lines);
+    quill_i_count_bytes(s, 64 * nb, t);
 }
 
 typedef size_t (*quill_i_run_fn)(quill_parser *, const unsigned char *, size_t, uint32_t, uint64_t);
-typedef void (*quill_i_count_fn)(const unsigned char *, size_t, uint64_t *, uint64_t *);
+typedef void (*quill_i_count_fn)(const unsigned char *, size_t, quill_i_tally *);
 
 static const struct {
     const char *name;
@@ -750,11 +780,12 @@ static void quill_i_count(quill_i_count_fn count, const char *buf, quill_range *
 {
     const unsigned char *s = QUILL_I_PTR(const unsigned char *, buf) + r->start;
     size_t len = r->end > r->start ? r->end - r->start : 0;
-    uint64_t quotes = 0, lines = 0;
-    count(s, len / 64, &quotes, &lines);
-    quill_i_count_bytes(s + len / 64 * 64, len % 64, &quotes, &lines);
-    r->odd_quotes = QUILL_I_CAST(int, quill_i_popcount(quotes) & 1);
-    r->newlines = lines;
+    quill_i_tally t = {0, 0, 0};
+    count(s, len / 64, &t);
+    quill_i_count_bytes(s + len / 64 * 64, len % 64, &t);
+    r->odd_quotes = QUILL_I_CAST(int, t.inq & 1);
+    r->newlines = t.lines;
+    r->rows = t.rows;
 }
 
 void quill_count(const char *buf, quill_range *r)
@@ -765,6 +796,26 @@ void quill_count(const char *buf, quill_range *r)
 static size_t quill_i_data_start(const char *buf, size_t len)
 {
     return len >= 3 && memcmp(buf, "\xEF\xBB\xBF", 3) == 0 ? 3 : 0;
+}
+
+uint64_t quill_count_rows(const char *buf, size_t len, const quill_range *ranges, size_t n)
+{
+    quill_range whole;
+    uint64_t rows = 0;
+    size_t j;
+    int inq = 0;
+    if (!n) {
+        whole.start = 0;
+        whole.end = len;
+        quill_count(buf, &whole);
+        ranges = &whole;
+        n = 1;
+    }
+    for (j = 0; j < n; j++) {
+        rows += inq ? ranges[j].newlines - ranges[j].rows : ranges[j].rows;
+        inq ^= ranges[j].odd_quotes & 1;
+    }
+    return rows + QUILL_I_CAST(uint64_t, len > quill_i_data_start(buf, len) && (buf[len - 1] != '\n' || inq));
 }
 
 /* Starts p at range r given the quote state inq just before it */
@@ -836,6 +887,7 @@ int quill_init_guess(quill_parser *p, char delim, int flags, const char *buf, si
     r->odd_quotes = 0;
     quill_i_start_range(p, buf, len, r, r->guess);
     p->guessed = r;
+    p->st.guard = 1;
     return 0;
 }
 
@@ -856,7 +908,7 @@ static void quill_i_finish_guess(quill_parser *p)
     p->guessed = QUILL_I_NULL;
     if (r->start == r->end)
         return;
-    tail.start = end;
+    tail.start = scan < end ? scan : end;
     tail.end = scan > end ? scan : end;
     quill_count(p->buf, &tail);
     r->odd_quotes = QUILL_I_CAST(int, p->st.inq & 1) ^ r->guess ^ tail.odd_quotes;
@@ -865,8 +917,16 @@ static void quill_i_finish_guess(quill_parser *p)
 int quill_i_next_slow(quill_parser *p, quill_field *f)
 {
     int rc = quill_i_slow(p, f);
-    if (rc == QUILL_END && p->guessed)
+    if (rc != QUILL_FIELD && p->guessed) {
+        quill_range *r = p->guessed;
         quill_i_finish_guess(p);
+        if (rc == QUILL_ERROR) {
+            r->guess = -1;
+            p->err_msg = QUILL_I_NULL;
+            p->halt = 1;
+            rc = QUILL_END;
+        }
+    }
     return rc;
 }
 
