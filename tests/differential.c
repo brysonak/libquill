@@ -146,7 +146,12 @@ static void finish(quill_parser *p, int rc, result *r)
     }
 }
 
+#ifdef QUILL_FUZZ
+#define TALLY(x) ((void)0)
+#else
+#define TALLY(x) ((x)++)
 static uint64_t guesses, wrong_guesses;
+#endif
 
 static void parse_ranges(quill_i_run_fn run, const unsigned char *s, size_t len, char delim, int strict, result *r)
 {
@@ -188,10 +193,10 @@ static void parse_ranges(quill_i_run_fn run, const unsigned char *s, size_t len,
     }
     for (k = 0; k < n; k++) {
         if (guess) {
-            guesses++;
+            TALLY(guesses);
             if (!quill_guess_ok(rg, k)) {
                 quill_field f;
-                wrong_guesses++;
+                TALLY(wrong_guesses);
                 part[k].n = 0;
                 assert(quill_init_range(&P, delim, 0, (const char *)s, len, rg, k) == 0);
                 P.run = run;
