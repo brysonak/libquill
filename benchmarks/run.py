@@ -144,7 +144,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("-r", dest="runs", type=int, default=3)
     ap.add_argument("-a", dest="actions", default="count,scan,find")
-    ap.add_argument("-n", dest="name", default="Debbie")
+    ap.add_argument("-n", dest="name", default="Berlin")
     ap.add_argument("-o", dest="only", default="")
     ap.add_argument("-f", dest="file", default=os.path.join(HERE, "big.csv"))
     a = ap.parse_args()
