@@ -4,6 +4,9 @@ A fast CSV parser in a single C header. No dependencies beyond the C standard li
 builds as C99 or C++11, and uses SIMD (AVX2, SSE2 or NEON) to find field boundaries
 64 bytes at a time.
 
+
+> **Note:** quill is pre-1.0. The API may still change between versions, so pin a specific commit if you use it.
+
 ```c
 #define QUILL_IMPLEMENTATION
 #include "quill.h"
