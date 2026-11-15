@@ -103,3 +103,7 @@ Needs `clang`, [`just`](https://github.com/casey/just) and Python 3.
 On Windows the recipes run in PowerShell, and `just test` copies clang's ASan runtime next to
 the test binaries. On macOS, `just fuzz` needs Homebrew's `llvm`, since Apple's clang has no
 libfuzzer.
+
+
+# License
+This project uses the MIT license, see [LICENSE](LICENSE).
