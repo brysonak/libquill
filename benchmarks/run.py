@@ -129,15 +129,17 @@ CONTENDERS = [
 
 
 def run(cmd, runs):
-    best, text = float("inf"), None
+    best, outs = float("inf"), set()
     for _ in range(runs):
         t = time.perf_counter()
         r = subprocess.run(cmd, capture_output=True, text=True)
         best = min(best, time.perf_counter() - t)
         if r.returncode:
             return None, (r.stderr.strip().splitlines() or ["exit %d" % r.returncode])[-1]
-        text = r.stdout.strip()
-    return best, text
+        outs.add(r.stdout.strip())
+    if len(outs) > 1:
+        return None, "output changed between runs: " + " / ".join(sorted(outs))
+    return best, outs.pop()
 
 
 def main():
@@ -195,3 +197,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
