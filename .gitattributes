@@ -1,0 +1,2 @@
+tests/csv/*.csv -text
+tests/fuzz/seeds/* -text
