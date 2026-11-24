@@ -1,2 +1,3 @@
 tests/csv/*.csv -text
 tests/fuzz/seeds/* -text
+tests/fuzz/csv.dict text eol=lf

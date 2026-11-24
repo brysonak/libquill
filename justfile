@@ -39,7 +39,7 @@ fuzz secs="60" *args:
     {{copy_asan}}
     {{py}} -c "import os; os.makedirs('build/corpus', exist_ok=True)"
     {{cc}} -std=c99 {{warn}} -O1 -g "-fsanitize=fuzzer,address,undefined" tests/fuzz/parse.c -o build/fuzz{{exe}}
-    ./build/fuzz{{exe}} build/corpus tests/fuzz/seeds -dict=tests/fuzz/csv.dict -max_total_time={{secs}} -artifact_prefix=build/ {{args}}
+    ./build/fuzz{{exe}} build/corpus tests/fuzz/seeds "-dict=tests/fuzz/csv.dict" -max_total_time={{secs}} -artifact_prefix=build/ {{args}}
 
 fuzz-check:
     {{mkdir}}
