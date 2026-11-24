@@ -4,3 +4,4 @@ benchmarks/*.csv
 benchmarks/.deps/
 benchmarks/*/target/
 benchmarks/venv/
+__pycache__/

@@ -129,7 +129,7 @@ static quill_parser P;
 
 static void collect(quill_field *f, result *r)
 {
-    char *tmp = (char *)malloc(f->len + 1);
+    char *tmp = (char *)malloc(f->len ? f->len : 1);
     size_t n;
     const char *v = quill_value(f, tmp, &n);
     put_field(r, v, n, f->eol);
@@ -249,9 +249,14 @@ static void parse(quill_i_run_fn run, const unsigned char *s, size_t len, char d
             have += take;
             pos += take;
             final = pos == len && !(empty_last && take);
-            quill_feed(&P, buf, have, final);
-            while ((rc = quill_next(&P, &f)) == QUILL_FIELD)
-                collect(&f, r);
+            {
+                char *exact = (char *)malloc(have ? have : 1);
+                memcpy(exact, buf, have);
+                quill_feed(&P, exact, have, final);
+                while ((rc = quill_next(&P, &f)) == QUILL_FIELD)
+                    collect(&f, r);
+                free(exact);
+            }
             if (rc != QUILL_MORE)
                 break;
             assert(!final);
@@ -325,16 +330,7 @@ static void check(const unsigned char *s, size_t len, char delim, int strict)
 
 static const char delims[] = {',', ';', '\t', 'a', (char)0xBB};
 
-#ifdef QUILL_FUZZ
-int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
-{
-    if (size < 1)
-        return 0;
-    rng = 88172645463325252ULL ^ data[0];
-    check(data + 1, size - 1, delims[data[0] % 5], data[0] >> 7);
-    return 0;
-}
-#else
+#ifndef QUILL_FUZZ
 
 static size_t gen_valid(unsigned char *s, size_t cap, char delim)
 {

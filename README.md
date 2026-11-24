@@ -99,7 +99,8 @@ Needs `clang`, [`just`](https://github.com/casey/just) and Python 3.
 | `just test` | Differential tests against a reference parser across every kernel, chunk size and range split, edge-case CSVs with expected output, a C++ build, all under ASan and UBSan |
 | `just gen` | Generates the large test files in `tests/csv` (dense, sparse, mixed, hostile) |
 | `just bench` | Per-kernel throughput on the test files |
-| `just fuzz [secs]` | libfuzzer run, 60 seconds by default |
+| `just fuzz [secs] [flags]` | libfuzzer run against the reference parser, 60 seconds by default. Keeps its corpus in `build/corpus` |
+| `just fuzz-check` | Replays the fuzz corpus through python's good ol' `csv` module |
 | `just compare` | The benchmark above |
 | `just fmt` | clang-format |
 
